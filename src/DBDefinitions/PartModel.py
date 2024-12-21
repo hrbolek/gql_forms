@@ -1,28 +1,37 @@
-import sqlalchemy
-from sqlalchemy.schema import Column
-from sqlalchemy import Uuid, String, DateTime, ForeignKey, Integer
-from sqlalchemy.orm import relationship
-
-from .uuid import UUIDFKey, UUIDColumn
-from .base import BaseModel
+import uuid
+from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .BaseModel import BaseModel, UUIDFKey
 
 class PartModel(BaseModel):
+    """Model representing a part of a form."""
+
     __tablename__ = "formparts"
 
-    id = UUIDColumn()
-    name = Column(String, comment="name of part")
-    name_en = Column(String, comment="english name of part")
-    order = Column(Integer, comment="order in parent entity")
-
-    section_id = Column(ForeignKey("formsections.id"), index=True)
-
-    created = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="when this entity has been created")
-    lastchange = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="timestamp / token")
-    createdby = UUIDFKey(nullable=True, comment="who's created the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-    changedby = UUIDFKey(nullable=True, comment="who's changed the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-
-    rbacobject = UUIDFKey(nullable=True, comment="user or group id, determines access")
-    state_id = UUIDFKey(nullable=True, comment="state of the request")
+    name: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Name of the part")
+    name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English name of the part")
+    order: Mapped[int] = mapped_column(Integer, nullable=True, default=None, comment="Order in the parent entity")
     
-    section = relationship("SectionModel", back_populates="parts", uselist=False)
-    items = relationship("ItemModel", back_populates="part", uselist=True)
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("formsections.id"), 
+        index=True, 
+        nullable=True, 
+        default=None, 
+        comment="Foreign key to the form section"
+    )
+    
+    state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
+    
+    # Relationships
+    section: Mapped["SectionModel"] = relationship(
+        "SectionModel", 
+        back_populates="parts", 
+        default=None, 
+        uselist=False
+    )
+    items: Mapped[list["ItemModel"]] = relationship(
+        "ItemModel", 
+        back_populates="part", 
+        default_factory=list,
+        uselist=True
+    )

@@ -2,7 +2,7 @@
 
 ## Execution
 ```bash
-uvicorn main:app --env-file environment.txt --port 8001 --log-level info --reload
+uvicorn main:app --env-file environment.txt --port 8002 --log-level info --reload
 ```
 
 ```bash

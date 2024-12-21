@@ -1,32 +1,37 @@
-import sqlalchemy
-from sqlalchemy.schema import Column
-from sqlalchemy.orm import relationship
-from sqlalchemy import Uuid, String, DateTime, ForeignKey, Integer
-
-from .uuid import UUIDFKey, UUIDColumn
-from .base import BaseModel
+import uuid
+from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .BaseModel import BaseModel, UUIDFKey
 
 class SectionModel(BaseModel):
+    """Model representing a section within a form."""
+
     __tablename__ = "formsections"
 
-    # requestId = Column(ForeignKey("requests.id"), primary_key=True)
-    # key is st sys structure name pr as id, fk follpw by id in lower letter
-
-    id = UUIDColumn()
-    name = Column(String, comment="name")
-    name_en = Column(String, comment="english name")
-
-    form_id = Column(ForeignKey("forms.id"), index=True)
-    order = Column(Integer, comment="order in parent entity")
-    status = Column(String)
-
-    created = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="when this entity has been created")
-    lastchange = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="timestamp / token")
-    createdby = UUIDFKey(nullable=True, comment="who's created the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-    changedby = UUIDFKey(nullable=True, comment="who's changed the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-
-    rbacobject = UUIDFKey(nullable=True, comment="user or group id, determines access")
-    state_id = UUIDFKey(nullable=True, comment="state of the request")
+    name: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Name of the section")
+    name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English name of the section")
     
-    form = relationship("FormModel", back_populates="sections")
-    parts = relationship("PartModel", back_populates="section", uselist=True)
+    form_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("forms.id"), 
+        index=True, 
+        nullable=True, 
+        default=None, 
+        comment="Foreign key to the associated form"
+    )
+    order: Mapped[int] = mapped_column(Integer, nullable=True, default=None, comment="Order in the parent entity")
+    status: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Status of the section")
+    
+    state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
+    
+    # Relationships
+    form: Mapped["FormModel"] = relationship(
+        "FormModel", 
+        default=None, 
+        back_populates="sections"
+    )
+    parts: Mapped[list["PartModel"]] = relationship(
+        "PartModel", 
+        back_populates="section", 
+        default_factory=list,
+        uselist=True
+    )

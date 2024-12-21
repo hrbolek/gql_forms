@@ -1,30 +1,41 @@
-import sqlalchemy
-from sqlalchemy.schema import Column
-from sqlalchemy import Uuid, String, DateTime, ForeignKey, Boolean
-from sqlalchemy.orm import relationship
-
-from .uuid import UUIDFKey, UUIDColumn
-from .base import BaseModel
+import uuid
+from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .BaseModel import BaseModel, UUIDFKey
 
 class FormModel(BaseModel):
+    """Model representing a form."""
+
     __tablename__ = "forms"
 
-    id = UUIDColumn()
-    name = Column(String, comment="name of form")
-    name_en = Column(String, comment="english name of form")
-
-    status = Column(String)
-    valid = Column(Boolean, default=True)
-    type_id = Column(ForeignKey("formtypes.id"), index=True, nullable=True)
-
-    created = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="when this entity has been created")
-    lastchange = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="timestamp / token")
-    createdby = UUIDFKey(nullable=True, comment="who's created the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-    changedby = UUIDFKey(nullable=True, comment="who's changed the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-
-    rbacobject = UUIDFKey(nullable=True, comment="user or group id, determines access")
-    state_id = UUIDFKey(nullable=True, comment="state of the request")
-
-    type = relationship("FormTypeModel", back_populates="forms", uselist=False, viewonly=True)
-    sections = relationship("SectionModel", back_populates="form", uselist=True, viewonly=True)
-    history = relationship("HistoryModel", back_populates="form", uselist=False, viewonly=True)
+    name: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Name of the form")
+    name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English name of the form")
+    
+    status: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Status of the form")
+    valid: Mapped[bool] = mapped_column(Boolean, default=True, comment="Indicates if the form is valid")
+    
+    type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("formtypes.id"), index=True, nullable=True, default=None, comment="Foreign key to form types")
+    state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
+    
+    # Relationships
+    type: Mapped["FormTypeModel"] = relationship(
+        "FormTypeModel", 
+        back_populates="forms", 
+        default=None, 
+        uselist=False, 
+        viewonly=True
+    )
+    sections: Mapped[list["SectionModel"]] = relationship(
+        "SectionModel", 
+        back_populates="form", 
+        default_factory=list,
+        uselist=True, 
+        viewonly=True
+    )
+    history: Mapped["HistoryModel"] = relationship(
+        "HistoryModel", 
+        back_populates="form", 
+        default=None, 
+        uselist=False, 
+        viewonly=True
+    )

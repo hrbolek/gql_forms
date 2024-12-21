@@ -1,31 +1,34 @@
-import sqlalchemy
-from sqlalchemy.schema import Column
-from sqlalchemy import Uuid, String, DateTime, ForeignKey, Integer
-from sqlalchemy.orm import relationship
-
-from .uuid import UUIDFKey, UUIDColumn
-from .base import BaseModel
+import uuid
+from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .BaseModel import BaseModel, UUIDFKey
 
 class ItemModel(BaseModel):
+    """Model representing an item in a form."""
+
     __tablename__ = "formitems"
 
-    id = UUIDColumn()
-    name = Column(String, comment="name of value")
-    name_en = Column(String, comment="english name of value")
+    name: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Name of the value")
+    name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English name of the value")
     
-    order = Column(Integer, comment="order in parent entity")
-    value = Column(String, comment="item value, together with name it is named value")
-
-    part_id = Column(ForeignKey("formparts.id"), index=True)
-    type_id = Column(ForeignKey("formitemtypes.id"), index=True)
-
-    created = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="when this entity has been created")
-    lastchange = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="timestamp / token")
-    createdby = UUIDFKey(nullable=True, comment="who's created the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-    changedby = UUIDFKey(nullable=True, comment="who's changed the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-
-    rbacobject = UUIDFKey(nullable=True, comment="user or group id, determines access")
-    state_id = UUIDFKey(nullable=True, comment="state of the request")
+    order: Mapped[int] = mapped_column(Integer, nullable=True, default=None, comment="Order in the parent entity")
+    value: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="Item value, together with name it is named value")
     
-    part = relationship("PartModel", back_populates="items", uselist=False)
-    type = relationship("ItemTypeModel", back_populates="items", uselist=False)
+    part_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("formparts.id"), index=True, nullable=True, default=None, comment="Foreign key to the form part")
+    type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("formitemtypes.id"), index=True, nullable=True, default=None, comment="Foreign key to the item type")
+    
+    state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
+    
+    # Relationships
+    part: Mapped["PartModel"] = relationship(
+        "PartModel", 
+        back_populates="items", 
+        default=None, 
+        uselist=False
+    )
+    type: Mapped["ItemTypeModel"] = relationship(
+        "ItemTypeModel", 
+        back_populates="items", 
+        default=None, 
+        uselist=False
+    )

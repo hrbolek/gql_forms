@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 
 
-from .base import BaseModel
+from .BaseModel import BaseModel
 from .FormCategoryModel import FormCategoryModel
 from .FormModel import FormModel
 from .FormTypeModel import FormTypeModel

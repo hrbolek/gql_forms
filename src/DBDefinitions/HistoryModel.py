@@ -1,28 +1,43 @@
-import sqlalchemy
-from sqlalchemy.schema import Column
-from sqlalchemy import Uuid, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-
-from .uuid import uuid, UUIDFKey, UUIDColumn
-from .base import BaseModel
+import uuid
+from sqlalchemy import String, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .BaseModel import BaseModel, UUIDFKey
 
 class HistoryModel(BaseModel):
+    """Model representing a history record for forms."""
+
     __tablename__ = "formhistories"
 
-    id = UUIDColumn()
-    name = Column(String, comment="a notice describing a reason")
-    name_en = Column(String, comment="english description")
-
-    request_id = Column(ForeignKey("formrequests.id"), index=True, nullable=True)
-    form_id = Column(ForeignKey("forms.id"), index=True, nullable=True)
-
-    created = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="when this entity has been created")
-    lastchange = Column(DateTime, server_default=sqlalchemy.sql.func.now(), comment="timestamp / token")
-    createdby = UUIDFKey(nullable=True, comment="who's created the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-    changedby = UUIDFKey(nullable=True, comment="who's changed the entity")#Column(ForeignKey("users.id"), index=True, nullable=True)
-
-    rbacobject = UUIDFKey(nullable=True, comment="user or group id, determines access")
-    state_id = UUIDFKey(nullable=True, comment="state of the request")
+    name: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="A notice describing a reason")
+    name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English description of the reason")
     
-    form = relationship("FormModel", back_populates="history", uselist=False)
-    request = relationship("RequestModel", back_populates="histories", uselist=False)
+    request_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("formrequests.id"), 
+        index=True, 
+        nullable=True, 
+        default=None, 
+        comment="Foreign key to form requests"
+    )
+    form_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("forms.id"), 
+        index=True, 
+        nullable=True, 
+        default=None, 
+        comment="Foreign key to forms"
+    )
+    
+    state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
+    
+    # Relationships
+    form: Mapped["FormModel"] = relationship(
+        "FormModel", 
+        back_populates="history", 
+        default=None, 
+        uselist=False
+    )
+    request: Mapped["RequestModel"] = relationship(
+        "RequestModel", 
+        back_populates="histories", 
+        default=None, 
+        uselist=False
+    )
