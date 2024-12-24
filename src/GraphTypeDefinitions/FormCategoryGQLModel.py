@@ -43,10 +43,10 @@ class FormCategoryGQLModel(BaseGQLModel):
         description="English name of the form category",
         permission_classes=[OnlyForAuthentized]
     )
-
+    from .FormTypeGQLModel import FormTypeInputFilter
     form_types: typing.List[FormTypeGQLModel] = strawberry.field(
         description="All types from this category",
-        resolver=VectorResolver[FormTypeGQLModel](fkey_field_name="category_id")
+        resolver=VectorResolver[FormTypeGQLModel](fkey_field_name="category_id", whereType=FormTypeInputFilter)
     )
 
 #############################################################

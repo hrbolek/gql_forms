@@ -57,10 +57,10 @@ class PartGQLModel(BaseGQLModel):
         description="State of the request",
         permission_classes=[OnlyForAuthentized]
     )
-    section: typing.Optional[FormSectionGQLModel] = strawberry.field(
+    section: typing.Optional[SectionGQLModel] = strawberry.field(
         description="The section this part belongs to",
         permission_classes=[OnlyForAuthentized],
-        resolver=ScalarResolver["FormSectionGQLModel"](fkey_field_name="section_id")
+        resolver=ScalarResolver["SectionGQLModel"](fkey_field_name="section_id")
     )
 
     @strawberry.field(

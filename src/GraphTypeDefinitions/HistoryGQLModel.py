@@ -1,3 +1,4 @@
+import dataclasses
 import strawberry
 import datetime
 import typing
@@ -13,6 +14,7 @@ from uoishelpers.gqlpermissions import (
 
 from uoishelpers.resolvers import (
     getLoadersFromInfo,
+    createInputs,
     VectorResolver,
     PageResolver,
     ScalarResolver,
@@ -24,7 +26,7 @@ from .BaseGQLModel import BaseGQLModel, IDType
 
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 RequestGQLModel = Annotated["RequestGQLModel", strawberry.lazy(".RequestGQLModel")]
-StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".externals")]
+StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".StateGQLModel")]
 
 @strawberry.federation.type(
     keys=["id"], description="Entity representing a history record for forms"
@@ -55,10 +57,10 @@ class HistoryGQLModel(BaseGQLModel):
         description="State of the request",
         permission_classes=[OnlyForAuthentized]
     )
-    request: typing.Optional[FormRequestGQLModel] = strawberry.field(
+    request: typing.Optional[RequestGQLModel] = strawberry.field(
         description="The associated form request",
         permission_classes=[OnlyForAuthentized],
-        resolver=ScalarResolver["FormRequestGQLModel"](fkey_field_name="request_id")
+        resolver=ScalarResolver["RequestGQLModel"](fkey_field_name="request_id")
     )
     form: typing.Optional[FormGQLModel] = strawberry.field(
         description="The associated form",

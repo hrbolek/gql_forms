@@ -31,7 +31,10 @@ from .ItemCategoryGQLModel import ItemCategoryGQLModel
 from .SectionGQLModel import SectionGQLModel
 from .PartGQLModel import PartGQLModel
 
-from .externals import UserGQLModel, StateGQLModel
+from .userGQLModel import UserGQLModel
+from .StateGQLModel import StateGQLModel
+from .RBACObjectGQLModel import RBACObjectGQLModel
+
 from ._GraphPermissions import RoleBasedPermission
 # from utils.Dataloaders import getUserFromInfo
 from uoishelpers.resolvers import getUserFromInfo
@@ -138,11 +141,11 @@ class Mutation:
     #from .HistoryGQLModel import 
 
     from .ItemTypeGQLModel import (
-        form_item_type_insert,
-        form_item_type_update
+        item_type_insert as form_item_type_insert,
+        item_type_update as form_item_type_update,
+        item_type_delete as form_item_type_delete
     )
-    form_item_type_insert = form_item_type_insert
-    form_item_type_update = form_item_type_update
+    
 
     from .PartGQLModel import (
         part_insert,
@@ -158,13 +161,11 @@ class Mutation:
     form_section_update = section_update
 
     from .RequestGQLModel import (
-        form_request_insert, 
-        form_request_update,
+        request_insert as form_request_insert, 
+        request_update as form_request_update,
+        request_delete as form_request_delete,
         form_request_use_transition
     )
-    form_request_insert = form_request_insert
-    form_request_update = form_request_update
-    form_request_use_transition = form_request_use_transition
 
     from .FormTypeGQLModel import (
         form_type_insert, form_type_update

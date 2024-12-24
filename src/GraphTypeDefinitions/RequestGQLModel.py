@@ -16,6 +16,7 @@ from uoishelpers.gqlpermissions import (
 
 from uoishelpers.resolvers import (
     getLoadersFromInfo,
+    getUserFromInfo,
     createInputs,
     VectorResolver,
     ScalarResolver,
@@ -26,9 +27,9 @@ from uoishelpers.resolvers import (
 )
 from .BaseGQLModel import BaseGQLModel, IDType
 
-UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".externals")]
+UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".userGQLModel")]
 HistoryGQLModel = Annotated["HistoryGQLModel", strawberry.lazy(".HistoryGQLModel")]
-StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".externals")]
+StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".StateGQLModel")]
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 
 # define the type help to get attribute name and name
@@ -62,15 +63,17 @@ class RequestGQLModel(BaseGQLModel):
         permission_classes=[OnlyForAuthentized],
         resolver=ScalarResolver["FormGQLModel"](fkey_field_name="form_id")
     )
-    state: typing.Optional[FormStateGQLModel] = strawberry.field(
+    state: typing.Optional[StateGQLModel] = strawberry.field(
         description="The state of the request",
         permission_classes=[OnlyForAuthentized],
-        resolver=ScalarResolver["FormStateGQLModel"](fkey_field_name="state_id")
+        resolver=ScalarResolver["StateGQLModel"](fkey_field_name="state_id")
     )
+
+    from .HistoryGQLModel import HistoryInputFilter
     histories: typing.List[HistoryGQLModel] = strawberry.field(
         description="Histories linked to this request",
         permission_classes=[OnlyForAuthentized],
-        resolver=VectorResolver["HistoryGQLModel"](fkey_field_name="request_id")
+        resolver=VectorResolver["HistoryGQLModel"](whereType=HistoryInputFilter, fkey_field_name="request_id")
     )
 #############################################################
 #
@@ -298,7 +301,7 @@ async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_fo
 @strawberry.mutation(
     description="C operation",
     permission_classes=[OnlyForAuthentized])
-async def form_request_insert(self, info: strawberry.types.Info, request: FormRequestInsertGQLModel) -> FormRequestResultGQLModel:
+async def form_request_insert(self, info: strawberry.types.Info, request: RequestInsertGQLModel) -> typing.Union[RequestGQLModel, InsertError[RequestGQLModel]]:
     user = getUserFromInfo(info)
     request.createdby = uuid.UUID(user["id"])
     request.rbacobject = uuid.UUID(user["id"])
@@ -348,7 +351,7 @@ async def form_request_insert(self, info: strawberry.types.Info, request: FormRe
         # StateBasedPermissionForUDOps(GQLModel=RequestGQLModel, parameterName="request", readPermission=False, writePermission=True)
         ],
     )
-async def form_request_use_transition(self, info: strawberry.types.Info, request: FormRequestUseTransitionGQLModel) -> typing.Optional[FormRequestResultGQLModel]:
+async def form_request_use_transition(self, info: strawberry.types.Info, request: FormRequestUseTransitionGQLModel) -> typing.Union[RequestGQLModel, UpdateError[RequestGQLModel]]:
     # create copy of current form
     # make row in histories
     # change state of request

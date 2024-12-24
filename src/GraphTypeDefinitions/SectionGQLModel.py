@@ -26,6 +26,7 @@ from .BaseGQLModel import BaseGQLModel, IDType
 
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 PartGQLModel = Annotated["PartGQLModel", strawberry.lazy(".PartGQLModel")]
+StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".StateGQLModel")]
 
 @strawberry.federation.type(
     keys=["id"], description="Entity representing a section within a form"
@@ -65,15 +66,16 @@ class SectionGQLModel(BaseGQLModel):
         permission_classes=[OnlyForAuthentized],
         resolver=ScalarResolver["FormGQLModel"](fkey_field_name="form_id")
     )
-    state: typing.Optional[FormStateGQLModel] = strawberry.field(
+    state: typing.Optional[StateGQLModel] = strawberry.field(
         description="The state of the section",
         permission_classes=[OnlyForAuthentized],
-        resolver=ScalarResolver["FormStateGQLModel"](fkey_field_name="state_id")
+        resolver=ScalarResolver["StateGQLModel"](fkey_field_name="state_id")
     )
+    from .PartGQLModel import PartInputFilter
     parts: typing.List[PartGQLModel] = strawberry.field(
         description="Parts linked to this section",
         permission_classes=[OnlyForAuthentized],
-        resolver=VectorResolver["PartGQLModel"](fkey_field_name="section_id")
+        resolver=VectorResolver["PartGQLModel"](fkey_field_name="section_id", whereType=PartInputFilter)
     )
 #############################################################
 #

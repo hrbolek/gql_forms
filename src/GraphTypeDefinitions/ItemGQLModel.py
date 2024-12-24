@@ -15,6 +15,7 @@ from uoishelpers.gqlpermissions import (
 from uoishelpers.resolvers import (
     getLoadersFromInfo,
     VectorResolver,
+    ScalarResolver,
     PageResolver,
     Insert, InsertError,
     Update, UpdateError,
@@ -74,10 +75,10 @@ class ItemGQLModel(BaseGQLModel):
         description="State of the item",
         permission_classes=[OnlyForAuthentized]
     )
-    part: typing.Optional[FormPartGQLModel] = strawberry.field(
+    part: typing.Optional[PartGQLModel] = strawberry.field(
         description="The parent form part of this item",
         permission_classes=[OnlyForAuthentized],
-        resolver=ScalarResolver["FormPartGQLModel"](fkey_field_name="part_id")
+        resolver=ScalarResolver["PartGQLModel"](fkey_field_name="part_id")
     )
     type: typing.Optional[ItemTypeGQLModel] = strawberry.field(
         description="The type of this item",
