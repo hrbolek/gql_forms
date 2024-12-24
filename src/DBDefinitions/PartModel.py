@@ -23,13 +23,13 @@ class PartModel(BaseModel):
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
     
     # Relationships
-    section: Mapped["SectionModel"] = relationship(
+    section = relationship(
         "SectionModel", 
         back_populates="parts", 
         default=None, 
         uselist=False
     )
-    items: Mapped[list["ItemModel"]] = relationship(
+    items = relationship(
         "ItemModel", 
         back_populates="part", 
         default_factory=list,

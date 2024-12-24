@@ -20,13 +20,13 @@ class FormTypeModel(BaseModel):
     )
     
     # Relationships
-    forms: Mapped[list["FormModel"]] = relationship(
+    forms = relationship(
         "FormModel", 
         back_populates="type", 
         default_factory=list,
         uselist=True
     )
-    category: Mapped["FormCategoryModel"] = relationship(
+    category = relationship(
         "FormCategoryModel", 
         back_populates="types",
         default=None, 

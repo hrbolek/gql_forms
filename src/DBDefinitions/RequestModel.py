@@ -21,7 +21,7 @@ class RequestModel(BaseModel):
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
     
     # Relationships
-    histories: Mapped[list["HistoryModel"]] = relationship(
+    histories = relationship(
         "HistoryModel", 
         back_populates="request", 
         uselist=True, 
@@ -29,7 +29,7 @@ class RequestModel(BaseModel):
         viewonly=True, 
         lazy="selectin"
     )
-    form: Mapped["FormModel"] = relationship(
+    form = relationship(
         "FormModel", 
         uselist=False,
         default=None,  

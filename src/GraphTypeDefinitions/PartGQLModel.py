@@ -36,7 +36,10 @@ class PartGQLModel(BaseGQLModel):
     GraphQL model for the Part entity.
     Represents a part of a form, including metadata and relationships.
     """
-
+    @classmethod
+    def getLoader(cls, info):
+        return getLoadersFromInfo(info).formparts
+    
     name: typing.Optional[str] = strawberry.field(
         description="Name of the part",
         permission_classes=[OnlyForAuthentized]
@@ -67,9 +70,10 @@ class PartGQLModel(BaseGQLModel):
         description="Retrieves the items related to this part",
         permission_classes=[OnlyForAuthentized])
     async def items(self, info: strawberry.types.Info) -> typing.List["ItemGQLModel"]:
-        loader = getLoadersFromInfo(info).items
-        result = await loader.filter_by(part_id=self.id)
-        return result
+        from .ItemGQLModel import ItemGQLModel
+        loader = ItemGQLModel.getLoader(info)
+        results = await loader.filter_by(part_id=self.id)
+        return (ItemGQLModel.from_dataclass(result) for result in results)
 
 @createInputs
 @dataclasses.dataclass
@@ -78,6 +82,12 @@ class PartInputFilter:
     Input filter for querying form parts.
     Allows filtering by various fields of the form parts.
     """
+
+    @classmethod
+    def getLoader(cls, info: strawberry.types.Info):
+        return getLoadersFromInfo(info=info).formparts    
+    
+
     name: str = strawberry.field(
         description="Filter by the name of the form part"
     )

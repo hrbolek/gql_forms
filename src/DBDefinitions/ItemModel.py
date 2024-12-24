@@ -20,13 +20,13 @@ class ItemModel(BaseModel):
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
     
     # Relationships
-    part: Mapped["PartModel"] = relationship(
+    part = relationship(
         "PartModel", 
         back_populates="items", 
         default=None, 
         uselist=False
     )
-    type: Mapped["ItemTypeModel"] = relationship(
+    type = relationship(
         "ItemTypeModel", 
         back_populates="items", 
         default=None, 

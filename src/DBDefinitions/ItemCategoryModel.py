@@ -12,7 +12,7 @@ class ItemCategoryModel(BaseModel):
     name_en: Mapped[str] = mapped_column(String, nullable=True, default=None, comment="English name of the category")
     
     # Relationships
-    types: Mapped[list["ItemTypeModel"]] = relationship(
+    types = relationship(
         "ItemTypeModel", 
         back_populates="category", 
         default_factory=list,

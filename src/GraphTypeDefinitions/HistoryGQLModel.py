@@ -36,7 +36,10 @@ class HistoryGQLModel(BaseGQLModel):
     GraphQL model for the History entity.
     Tracks changes and historical states for forms and requests.
     """
-
+    @classmethod
+    def getLoader(cls, info: strawberry.types.Info):
+        return getLoadersFromInfo(info=info).formhistories
+    
     name: typing.Optional[str] = strawberry.field(
         description="A notice describing the reason",
         permission_classes=[OnlyForAuthentized]
@@ -73,7 +76,7 @@ class HistoryGQLModel(BaseGQLModel):
         permission_classes=[OnlyForAuthentized])
     async def state(self, info: strawberry.types.Info) -> typing.Optional["StateGQLModel"]:
         #user = UserGQLModel(id=self.createdby)
-        from .externals import StateGQLModel
+        from .StateGQLModel import StateGQLModel
         return await StateGQLModel.resolve_reference(info=info, id=self.state_id)
 
 #############################################################

@@ -34,7 +34,7 @@ ItemGQLModel = Annotated["ItemGQLModel", strawberry.lazy(".ItemGQLModel")]
 class ItemTypeGQLModel(BaseGQLModel):
     @classmethod
     def getLoader(cls, info):
-        return getLoadersFromInfo(info).itemtypes
+        return getLoadersFromInfo(info).formitemtypes
     
     # @classmethod
     # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):

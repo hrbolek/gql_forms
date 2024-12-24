@@ -41,6 +41,9 @@ class RequestGQLModel(BaseGQLModel):
     GraphQL model for the Request entity.
     Represents form requests, including their associated form and histories.
     """
+    @classmethod
+    def getLoader(cls, info: strawberry.types.Info):
+        return getLoadersFromInfo(info=info).formrequests
 
     name: typing.Optional[str] = strawberry.field(
         description="Name of the request",

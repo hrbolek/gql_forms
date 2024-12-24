@@ -36,6 +36,10 @@ class SectionGQLModel(BaseGQLModel):
     GraphQL model for the Section entity.
     Represents sections in forms, including their associated parts and form.
     """
+    @classmethod
+    def getLoader(cls, info: strawberry.types.Info):
+        return getLoadersFromInfo(info=info).formsections    
+    
 
     name: typing.Optional[str] = strawberry.field(
         description="Name of the section",

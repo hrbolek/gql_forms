@@ -42,7 +42,7 @@ class ItemUpdateGQLModel:
 class ItemGQLModel(BaseGQLModel):
     @classmethod
     def getLoader(cls, info):
-        return getLoadersFromInfo(info).items
+        return getLoadersFromInfo(info).formitems
     
     # @classmethod
     # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):

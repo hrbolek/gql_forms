@@ -24,12 +24,12 @@ class SectionModel(BaseModel):
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
     
     # Relationships
-    form: Mapped["FormModel"] = relationship(
+    form = relationship(
         "FormModel", 
         default=None, 
         back_populates="sections"
     )
-    parts: Mapped[list["PartModel"]] = relationship(
+    parts = relationship(
         "PartModel", 
         back_populates="section", 
         default_factory=list,

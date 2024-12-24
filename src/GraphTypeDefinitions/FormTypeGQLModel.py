@@ -34,6 +34,9 @@ class FormTypeGQLModel(BaseGQLModel):
     GraphQL model for the FormType entity.
     Represents different types of forms with metadata such as name and category.
     """
+    @classmethod
+    def getLoader(cls, info: strawberry.types.Info):
+        return getLoadersFromInfo(info=info).formtypes
 
     name: typing.Optional[str] = strawberry.field(
         description="Name of the form type",

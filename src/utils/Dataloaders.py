@@ -2,6 +2,7 @@ from functools import cache
 import logging
 
 from src.DBDefinitions import (
+    BaseModel,
     FormModel, 
     FormTypeModel, 
     FormCategoryModel,
@@ -346,64 +347,20 @@ class Loaders:
     itemcategories = None
     pass
 
-def createLoaders(asyncSessionMaker, models=dbmodels) -> Loaders:
-    class Loaders:
+def createLoaders(asyncSessionMaker):
 
-        @property
-        @cache
-        def authorizations(self):
-            return AuthorizationLoader()
+    def createLambda(loaderName, DBModel):
+        return lambda self: createIdLoader(asyncSessionMaker, DBModel)
 
-        @property
-        @cache
-        def requests(self):
-            return createIdLoader(asyncSessionMaker, RequestModel)
-        
-        @property
-        @cache
-        def histories(self):
-            return createIdLoader(asyncSessionMaker, HistoryModel)
-        
-        @property
-        @cache
-        def forms(self):
-            return createIdLoader(asyncSessionMaker, FormModel)
-        
-        @property
-        @cache
-        def formtypes(self):
-            return createIdLoader(asyncSessionMaker, FormTypeModel)
-        
-        @property
-        @cache
-        def formcategories(self):
-            return createIdLoader(asyncSessionMaker, FormCategoryModel)
-        
-        @property
-        @cache
-        def sections(self):
-            return createIdLoader(asyncSessionMaker, SectionModel)
+    attrs = {}
 
-        @property
-        @cache
-        def parts(self):
-            return createIdLoader(asyncSessionMaker, PartModel)
-        
-        @property
-        @cache
-        def items(self):
-            return createIdLoader(asyncSessionMaker, ItemModel)
-        
-        @property
-        @cache
-        def itemtypes(self):
-            return createIdLoader(asyncSessionMaker, ItemTypeModel)
-
-        @property
-        @cache
-        def itemcategories(self):
-            return createIdLoader(asyncSessionMaker, ItemCategoryModel)
-        
+    for DBModel in BaseModel.registry.mappers:
+        cls = DBModel.class_
+        attrs[cls.__tablename__] = property(cache(createLambda(asyncSessionMaker, cls)))
+        attrs[cls.__name__] = attrs[cls.__tablename__]
+    
+    # attrs["authorizations"] = property(cache(lambda self: AuthorizationLoader()))
+    Loaders = type('Loaders', (), attrs)   
     return Loaders()
 
 

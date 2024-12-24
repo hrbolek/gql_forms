@@ -23,13 +23,13 @@ class ItemTypeModel(BaseModel):
     )
     
     # Relationships
-    items: Mapped[list["ItemModel"]] = relationship(
+    items = relationship(
         "ItemModel", 
         back_populates="type", 
         default_factory=list,
         uselist=True
     )
-    category: Mapped["ItemCategoryModel"] = relationship(
+    category = relationship(
         "ItemCategoryModel", 
         back_populates="types", 
         default=None, 

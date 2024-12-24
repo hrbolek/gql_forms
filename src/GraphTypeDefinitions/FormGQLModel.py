@@ -25,8 +25,8 @@ from .BaseGQLModel import BaseGQLModel, IDType
 
 SectionGQLModel = Annotated["SectionGQLModel", strawberry.lazy(".SectionGQLModel")]
 FormTypeGQLModel = Annotated["FormTypeGQLModel", strawberry.lazy(".FormTypeGQLModel")]
-UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".externals")]
-StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".externals")]
+UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".userGQLModel")]
+StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".StateGQLModel")]
 RequestGQLModel = Annotated["RequestGQLModel", strawberry.lazy(".RequestGQLModel")]
 
 FormGQLModelDescription = """
@@ -91,7 +91,15 @@ class FormGQLModel(BaseGQLModel):
     #     permission_classes=[OnlyForAuthentized],
     #     resolver=ScalarResolver["FormStateGQLModel"](fkey_field_name="state_id")
     # )
-
+    @strawberry.field(
+        description="State of the form",
+        permission_classes=[OnlyForAuthentized]            
+    )
+    async def state(self, info: strawberry.types.Info) -> typing.Optional[StateGQLModel]:
+        from .StateGQLModel import StateGQLModel
+        result = await StateGQLModel.resolve_reference(info=info, id=self.state_id)
+        return result
+    
     @strawberry.field(
         description="Retrieves the sections related to this form (form has several sections), form->section->part->item",
         permission_classes=[OnlyForAuthentized],
@@ -99,9 +107,11 @@ class FormGQLModel(BaseGQLModel):
     async def sections(
         self, info: strawberry.types.Info,
     ) -> typing.List["SectionGQLModel"]:
-        loader = getLoadersFromInfo(info).sections
+        from .SectionGQLModel import SectionGQLModel
+        loader = SectionGQLModel.getLoader(info)
         results = await loader.filter_by(form_id=self.id)
-        return results
+
+        return (SectionGQLModel.from_dataclass(result) for result in results)
 
     @strawberry.field(
         description="Retrieves the type of form",

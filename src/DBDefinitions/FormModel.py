@@ -18,21 +18,21 @@ class FormModel(BaseModel):
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
     
     # Relationships
-    type: Mapped["FormTypeModel"] = relationship(
+    type = relationship(
         "FormTypeModel", 
         back_populates="forms", 
         default=None, 
         uselist=False, 
         viewonly=True
     )
-    sections: Mapped[list["SectionModel"]] = relationship(
+    sections = relationship(
         "SectionModel", 
         back_populates="form", 
         default_factory=list,
         uselist=True, 
         viewonly=True
     )
-    history: Mapped["HistoryModel"] = relationship(
+    history = relationship(
         "HistoryModel", 
         back_populates="form", 
         default=None, 
