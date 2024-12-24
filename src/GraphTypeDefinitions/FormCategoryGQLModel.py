@@ -1,25 +1,26 @@
+import dataclasses
 import strawberry
 import datetime
 import typing
 import uuid
 
-# from utils.Dataloaders import getLoadersFromInfo, getUserFromInfo
-from uoishelpers.resolvers import getLoadersFromInfo, getUserFromInfo
-
-from .BaseGQLModel import BaseGQLModel
-from ._GraphPermissions import OnlyForAuthentized
-from ._GraphResolvers import (
-    resolve_id,
-    resolve_name,
-    resolve_name_en,
-    resolve_changedby,
-    resolve_created,
-    resolve_lastchange,
-    resolve_createdby,
-    resolve_rbacobject,
-    # createRootResolver_by_id,
-    # asPage
+from uoishelpers.gqlpermissions import (
+    OnlyForAuthentized, 
+    SimpleInsertPermission,
+    SimpleUpdatePermission,
+    SimpleDeletePermission
 )
+
+from uoishelpers.resolvers import (
+    getLoadersFromInfo,
+    VectorResolver,
+    PageResolver,
+    Insert, InsertError,
+    Update, UpdateError,
+    Delete, DeleteError
+)
+from .BaseGQLModel import BaseGQLModel, IDType
+
 
 FormTypeGQLModel = typing.Annotated["FormTypeGQLModel", strawberry.lazy(".FormTypeGQLModel")]
 
@@ -32,27 +33,32 @@ class FormCategoryGQLModel(BaseGQLModel):
     @classmethod
     def getLoader(cls, info):
         return getLoadersFromInfo(info).formcategories
-    
+
+    @classmethod
+    def from_dataclass(cls, db_row):
+        db_row_dict = dataclasses.asdict(db_row)
+        db_row_dict["valid"] = db_row.valid
+        instance = cls(**db_row_dict)
+        return instance
+
     # @classmethod
     # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
     # implementation is inherited
 
-    id = resolve_id
-    name = resolve_name
-    changedby = resolve_changedby
-    lastchange = resolve_lastchange
-    created = resolve_created
-    createdby = resolve_createdby
-    name_en = resolve_name_en
-    rbacobject = resolve_rbacobject
+    name: str = strawberry.field(
+        description="Name of the form category",
+        permission_classes=[OnlyForAuthentized]
+    )
 
-    @strawberry.field(
-        description="",
-        permission_classes=[OnlyForAuthentized])
-    async def form_types(self, info: strawberry.types.Info) -> typing.List[FormTypeGQLModel]:
-        loader = getLoadersFromInfo(info).formtypes
-        rows = await loader.filter_by(category_id=self.id)
-        return rows
+    name_en: str = strawberry.field(
+        description="English name of the form category",
+        permission_classes=[OnlyForAuthentized]
+    )
+
+    form_types: typing.List[FormTypeGQLModel] = strawberry.field(
+        description="All types from this category",
+        resolver=VectorResolver[FormTypeGQLModel](fkey_field_name="category_id")
+    )
 
 #############################################################
 #
@@ -65,7 +71,8 @@ from uoishelpers.resolvers import createInputs
 
 @createInputs
 @dataclass
-class FormCategoryWhereFilter:
+class FormCategoryInputFilter:
+    id: IDType
     name: str
     name_en: str
 
@@ -77,34 +84,10 @@ async def form_category_by_id(self, info: strawberry.types.Info, id: uuid.UUID) 
     result = await FormCategoryGQLModel.resolve_reference(info=info, id=id)
     return result
 
-# form_category_by_id = createRootResolver_by_id(
-#     FormCategoryGQLModel, 
-#     description="Retrieves the form category")
-
-# @strawberry.field(description="Retrieves the form category")
-# async def form_category_by_id(
-#     self, info: strawberry.types.Info, id: uuid.UUID
-# ) -> typing.Union[FormCategoryGQLModel, None]:
-#     result = await FormCategoryGQLModel.resolve_reference(info=info, id=id)
-#     return result
-
-
-# @strawberry.field(description="Retrieves the form categories")
-# async def form_category_page(
-#     self, info: strawberry.types.Info, skip: int = 0, limit: int = 10,
-#     where: typing.Optional[FormCategoryWhereFilter] = None
-# ) -> typing.List[FormCategoryGQLModel]:
-#     wf = None if where is None else strawberry.asdict(where)
-#     loader = getLoadersFromInfo(info).formcategories
-#     result = await loader.page(skip=skip, limit=limit, where=wf)
-#     return result
-
 form_category_page = strawberry.field(
     description='Retrieves the form categories',
-        resolver=FormCategoryResolvers.Page(
-        GQLModel=FormCategoryGQLModel,
-        WhereFilterModel=FormCategoryWhereFilter
-        )
+    graphql_type=typing.List[FormCategoryGQLModel],
+    resolver=PageResolver[FormCategoryGQLModel](whereType=FormCategoryInputFilter)
 )
 
 #############################################################
@@ -112,62 +95,64 @@ form_category_page = strawberry.field(
 # Mutations
 #
 #############################################################
-from ._GraphPermissions import OnlyForAuthentized
-@strawberry.input(description="Input structure - C operation")
+
+@strawberry.input(description="Attributes for creating a new form category")
 class FormCategoryInsertGQLModel:
-    name: str = strawberry.field(description="Category name")
-    
-    name_en: typing.Optional[str] = strawberry.field(description="category english name", default=None)
-    id: typing.Optional[uuid.UUID] = strawberry.field(description="primary key (UUID), could be client generated", default=None)
-    createdby: strawberry.Private[uuid.UUID] = None
+    name: str = strawberry.field(description="Name of the form category")
+    name_en: str = strawberry.field(description="English name of the form category")
+    id: typing.Optional[IDType] = strawberry.field(description="Client-generated ID (optional)", default=None)
+    createdby_id: strawberry.Private[uuid.UUID] = None
 
-@strawberry.input(description="Input structure - U Operation")
+@strawberry.input(description="Attributes for updating an existing form category")
 class FormCategoryUpdateGQLModel:
-    lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
-    id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
+    id: IDType = strawberry.field(description="Unique ID of the form category to update")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification to ensure data consistency"
+    )
+    name: typing.Optional[str] = strawberry.field(description="Updated name of the form category", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="Updated English name of the form category", default=None)
 
-    name: typing.Optional[str] = strawberry.field(description="category name", default=None)
-    name_en: typing.Optional[str] = strawberry.field(description="category english name", default=None)
-    changedby: strawberry.Private[uuid.UUID] = None
+    changedby_id: strawberry.Private[uuid.UUID] = None
 
-
-from ._GraphResolvers import resolve_result_id, resolve_result_msg
-@strawberry.type(
-    description="Result of CU operations on FormCategory")
-class FormCategoryResultGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key of CU operation object")
-    msg: str = strawberry.field(description="""Should be `ok` if descired state has been reached, otherwise `fail`.
-For update operation fail should be also stated when bad lastchange has been entered.""")
-    
-    msg = resolve_result_msg
-
-    @strawberry.field(description="subject of operation")
-    async def category(self, info: strawberry.types.Info) -> FormCategoryGQLModel:
-        return await FormCategoryGQLModel.resolve_reference(info, self.id)
-
+@strawberry.input(description="Attributes for deleting an existing form category")
+class FormCategoryDeleteGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the form category to delete")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification to ensure data consistency"
+    )
 
 @strawberry.mutation(
-    description="Create a new category",
-    permission_classes=[OnlyForAuthentized])
-async def form_category_insert(self, info: strawberry.types.Info, form_category: FormCategoryInsertGQLModel) -> FormCategoryResultGQLModel:
-    user = getUserFromInfo(info)
-    form_category.createdby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).formcategories
-    row = await loader.insert(form_category)
-    result = FormCategoryResultGQLModel(id=row.id, msg="ok")
-    result.msg = "ok"
-    result.id = row.id
-    return result
+    description="Create a new form category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleInsertPermission[FormCategoryGQLModel](roles=["administrátor"]),
+    ],
+)
+async def form_category_insert(
+    self, info: strawberry.types.Info, category: FormCategoryInsertGQLModel
+) -> typing.Union[FormCategoryGQLModel, InsertError[FormCategoryGQLModel]]:
+    return await Insert[FormCategoryGQLModel].DoItSafeWay(info=info, entity=category)
 
 @strawberry.mutation(
-    description="Update the category",
-    permission_classes=[OnlyForAuthentized])
-async def form_category_update(self, info: strawberry.types.Info, form_category: FormCategoryUpdateGQLModel) -> FormCategoryResultGQLModel:
-    user = getUserFromInfo(info)
-    form_category.changedby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).formcategories
-    row = await loader.update(form_category)
-    result = FormCategoryResultGQLModel(id=form_category.id, msg="ok")
-    result.msg = "fail" if row is None else "ok"
-    result.id = form_category.id
-    return result   
+    description="Update an existing form category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleUpdatePermission[FormCategoryGQLModel](roles=["administrator"]),
+    ],
+)
+async def form_category_update(
+    self, info: strawberry.types.Info, category: FormCategoryUpdateGQLModel
+) -> typing.Union[FormCategoryGQLModel, UpdateError[FormCategoryGQLModel]]:
+    return await Update[FormCategoryGQLModel].DoItSafeWay(info=info, entity=category)
+
+@strawberry.mutation(
+    description="Delete an existing form category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleDeletePermission[FormCategoryGQLModel](roles=["administrátor"]),
+    ],
+)
+async def form_category_delete(
+    self, info: strawberry.types.Info, category: FormCategoryDeleteGQLModel
+) -> typing.Optional[DeleteError[FormCategoryGQLModel]]:
+    return await Delete[FormCategoryGQLModel].DoItSafeWay(info=info, entity=category)

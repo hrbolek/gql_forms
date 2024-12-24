@@ -47,6 +47,10 @@ class Query:
         return result
 
     # from .RequestGQLModel import form_test_extension
+    from .FormCategoryGQLModel import (
+        form_category_by_id,
+        form_category_page
+    )
 
     from .RequestGQLModel import (
         request_by_id, 
@@ -73,12 +77,6 @@ class Query:
     form_type_by_id = form_type_by_id
     form_type_page = form_type_page
 
-    from .FormCategoryGQLModel import (
-        form_category_by_id,
-        form_category_page
-    )
-    form_category_by_id = form_category_by_id
-    form_category_page = form_category_page
 
     from .SectionGQLModel import form_section_by_id
     form_section_by_id = form_section_by_id
@@ -117,6 +115,13 @@ class Query:
 @strawberry.type(description="""Type for mutation root""")
 class Mutation:
 
+    from .FormCategoryGQLModel import (
+        form_category_insert,
+        form_category_update,
+        form_category_delete
+    )
+
+
     from .FormGQLModel import (
         form_insert,
         form_update
@@ -145,13 +150,6 @@ class Mutation:
     )
     form_part_insert = part_insert
     form_part_update = part_update
-
-    from .FormCategoryGQLModel import (
-        form_category_insert,
-        form_category_update
-    )
-    form_category_insert = form_category_insert
-    form_category_update = form_category_update
 
     from .SectionGQLModel import (
         section_insert, section_update
