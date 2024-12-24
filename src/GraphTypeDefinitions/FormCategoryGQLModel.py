@@ -34,17 +34,6 @@ class FormCategoryGQLModel(BaseGQLModel):
     def getLoader(cls, info):
         return getLoadersFromInfo(info).formcategories
 
-    @classmethod
-    def from_dataclass(cls, db_row):
-        db_row_dict = dataclasses.asdict(db_row)
-        db_row_dict["valid"] = db_row.valid
-        instance = cls(**db_row_dict)
-        return instance
-
-    # @classmethod
-    # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
-    # implementation is inherited
-
     name: str = strawberry.field(
         description="Name of the form category",
         permission_classes=[OnlyForAuthentized]

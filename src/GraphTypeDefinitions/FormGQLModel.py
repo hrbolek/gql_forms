@@ -2,7 +2,6 @@ import strawberry
 import typing
 import datetime
 import uuid
-import logging
 
 from typing import Annotated
 from uoishelpers.gqlpermissions import (
@@ -140,52 +139,22 @@ from uoishelpers.resolvers import createInputs
 # FormTypeWhereFilter_ = typing.Annotated["FormTypeWhereFilter", strawberry.lazy(".FormTypeGQLModel")]
 @createInputs
 @dataclass
-class FormWhereFilter:
+class FormInputFilter:
     name: str
     name_en: str
     valid: bool
     type_id: uuid.UUID
     createdby: uuid.UUID
 
-    from .FormTypeGQLModel import FormTypeWhereFilter
-    type: FormTypeWhereFilter
+    from .FormTypeGQLModel import FormTypeInputFilter
+    type: FormTypeInputFilter
 
-# @strawberry.field(
-#     description="Retrieves the form type",
-#     permission_classes=[OnlyForAuthentized])
-# async def form_page(
-#     self, info: strawberry.types.Info, skip: int = 0, limit: int = 10,
-#     where: typing.Optional[FormWhereFilter] = None
-# ) -> typing.List[FormGQLModel]:
-#     # print(info)
-#     # context = info.context
-#     # request = context["request"]
-#     # user = request.scope["user"]
-#     # print(user)
-#     wf = None if where is None else strawberry.asdict(where)
-#     loader = getLoadersFromInfo(info).forms
-#     result = await loader.page(skip, limit, where=wf)
-#     return result    
-
-from src.DBResolvers import FormResolvers
 form_page = strawberry.field(
     description="Retrieves the form type",
     permission_classes=[OnlyForAuthentized],
-    resolver=FormResolvers.Page(GQLModel=FormGQLModel, WhereFilterModel=FormWhereFilter))
-
-# from ._GraphResolvers import asPage
-
-# @strawberry.field(
-#     description="Retrieves the form type",
-#     permission_classes=[OnlyForAuthentized])
-# @asPage
-# async def form_page(
-#     self, info: strawberry.types.Info, skip: int = 0, limit: int = 10,
-#     where: typing.Optional[FormWhereFilter] = None
-# ) -> typing.List[FormGQLModel]:
-#     return getLoadersFromInfo(info).forms
-
-
+    graphql_type=typing.List[FormGQLModel],
+    resolver=PageResolver[FormGQLModel](whereType=FormInputFilter)
+)
 
 #############################################################
 #

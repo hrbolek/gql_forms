@@ -3,22 +3,23 @@ import typing
 import datetime
 import uuid
 
-from uoishelpers.resolvers import getLoadersFromInfo, getUserFromInfo
-
-from .BaseGQLModel import BaseGQLModel
-from ._GraphPermissions import RoleBasedPermission, OnlyForAuthentized
-from ._GraphResolvers import (
-    resolve_id,
-    resolve_name,
-    resolve_name_en,
-    resolve_changedby,
-    resolve_created,
-    resolve_lastchange,
-    resolve_createdby,
-    resolve_rbacobject,
-    # createRootResolver_by_id,
-    # createRootResolver_by_page
+from uoishelpers.gqlpermissions import (
+    OnlyForAuthentized, 
+    SimpleInsertPermission,
+    SimpleUpdatePermission,
+    SimpleDeletePermission
 )
+
+from uoishelpers.resolvers import (
+    getLoadersFromInfo,
+    VectorResolver,
+    PageResolver,
+    Insert, InsertError,
+    Update, UpdateError,
+    Delete, DeleteError
+)
+from .BaseGQLModel import BaseGQLModel, IDType
+
 
 ItemTypeGQLModel = typing.Annotated["ItemTypeGQLModel", strawberry.lazy(".ItemTypeGQLModel")]
 
@@ -36,14 +37,15 @@ class ItemCategoryGQLModel(BaseGQLModel):
     # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
     # implementation is inherited
 
-    id = resolve_id
-    name = resolve_name
-    changedby = resolve_changedby
-    lastchange = resolve_lastchange
-    created = resolve_created
-    createdby = resolve_createdby
-    name_en = resolve_name_en
-    rbacobject = resolve_rbacobject
+    name: str = strawberry.field(
+        description="Name of the form category",
+        permission_classes=[OnlyForAuthentized]
+    )
+
+    name_en: str = strawberry.field(
+        description="English name of the form category",
+        permission_classes=[OnlyForAuthentized]
+    )
     
     @strawberry.field(
         description="Returns all type for this category",
@@ -65,28 +67,18 @@ from uoishelpers.resolvers import createInputs
 
 @createInputs
 @dataclass
-class FormItemCategoryWhereFilter:
+class FormItemCategoryInputFilter:
     id: uuid.UUID
     name: str
     category_id: uuid.UUID
 
-
-# @strawberry.field(
-#     description="Retrieves the item categories",
-#     permission_classes=[OnlyForAuthentized])
-# async def item_category_page(
-#     self, info: strawberry.types.Info, skip: int = 0, limit: int = 10
-# ) -> typing.List[ItemCategoryGQLModel]:
-#     loader = getLoadersFromInfo(info).itemcategories
-#     result = await loader.page(skip=skip, limit=limit)
-#     return result
-
 item_category_page = strawberry.field(
     description="Retrieves the item categories",
-    resolver=ItemCategoryResolvers.Page(GQLModel=ItemCategoryGQLModel, WhereFilterModel=FormItemCategoryWhereFilter),
     permission_classes=[
         OnlyForAuthentized
-        ]
+    ],
+    graphql_type=typing.List[ItemCategoryGQLModel],
+    resolver=PageResolver[ItemCategoryGQLModel](whereType=FormItemCategoryInputFilter)
     )
 
 @strawberry.field(
@@ -119,39 +111,66 @@ class FormItemCategoryUpdateGQLModel:
     name: typing.Optional[str] = strawberry.field(description="Item category name", default=None)
     changedby: strawberry.Private[uuid.UUID] = None
 
-@strawberry.type(description="Result of CU operations")
-class FormItemCategoryResultGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key of CU operation object")
-    msg: str = strawberry.field(description="""Should be `ok` if descired state has been reached, otherwise `fail`.
-For update operation fail should be also stated when bad lastchange has been entered.""")
 
-    @strawberry.field(description="Object of CU operation, final version")
-    async def category(self, info: strawberry.types.Info) -> ItemCategoryGQLModel:
-        result = await ItemCategoryGQLModel.resolve_reference(info=info, id=self.id)
-        return result
+@strawberry.input(description="Attributes for creating a new item category")
+class ItemCategoryInsertGQLModel:
+    id: typing.Optional[IDType] = strawberry.field(
+        description="Client-generated ID for the item category (optional)", default=None
+    )
+    name: typing.Optional[str] = strawberry.field(description="Name of the category", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="English name of the category", default=None)
+    createdby_id: strawberry.Private[uuid.UUID] = None 
+
+@strawberry.input(description="Attributes for updating an existing item category")
+class ItemCategoryUpdateGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the item category to update")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+    name: typing.Optional[str] = strawberry.field(description="Updated name of the category", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="Updated English name of the category", default=None)
+    changedby_id: strawberry.Private[uuid.UUID] = None
+
+@strawberry.input(description="Attributes for deleting an existing item category")
+class ItemCategoryDeleteGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the item category to delete")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+
 
 @strawberry.mutation(
-    description="C operation",
-    permission_classes=[OnlyForAuthentized])
-async def item_category_insert(self, info: strawberry.types.Info, item_category: FormItemCategoryInsertGQLModel) -> FormItemCategoryResultGQLModel:
-    user = getUserFromInfo(info)
-    item_category.createdby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).itemcategories
-    row = await loader.insert(item_category)
-    result = FormItemCategoryResultGQLModel(id=row.id, msg="ok")
-    result.msg = "ok"
-    result.id = row.id
-    return result
+    description="Create a new item category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleInsertPermission[ItemCategoryGQLModel](roles=["administrator"]),
+    ],
+)
+async def item_category_insert(
+    self, info: strawberry.types.Info, category: ItemCategoryInsertGQLModel
+) -> typing.Union[ItemCategoryGQLModel, InsertError[ItemCategoryGQLModel]]:
+    return await Insert[ItemCategoryGQLModel].DoItSafeWay(info=info, entity=category)
 
 @strawberry.mutation(
-    description="U operation",
-    permission_classes=[OnlyForAuthentized])
-async def item_category_update(self, info: strawberry.types.Info, item_category: FormItemCategoryUpdateGQLModel) -> FormItemCategoryResultGQLModel:
-    user = getUserFromInfo(info)
-    item_category.changedby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).itemcategories
-    row = await loader.update(item_category)
-    result = FormItemCategoryResultGQLModel(id=item_category.id, msg="ok")
-    result.msg = "fail" if row is None else "ok"
-    result.id = item_category.id
-    return result   
+    description="Update an existing item category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleUpdatePermission[ItemCategoryGQLModel](roles=["administrator"]),
+    ],
+)
+async def item_category_update(
+    self, info: strawberry.types.Info, category: ItemCategoryUpdateGQLModel
+) -> typing.Union[ItemCategoryGQLModel, UpdateError[ItemCategoryGQLModel]]:
+    return await Update[ItemCategoryGQLModel].DoItSafeWay(info=info, entity=category)
+
+@strawberry.mutation(
+    description="Delete an existing item category",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleDeletePermission[ItemCategoryGQLModel](roles=["administrator"]),
+    ],
+)
+async def item_category_delete(
+    self, info: strawberry.types.Info, category: ItemCategoryDeleteGQLModel
+) -> typing.Optional[DeleteError[ItemCategoryGQLModel]]:
+    return await Delete[ItemCategoryGQLModel].DoItSafeWay(info=info, entity=category)

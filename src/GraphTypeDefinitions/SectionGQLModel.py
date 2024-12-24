@@ -5,71 +5,76 @@ import uuid
 
 from typing import Annotated
 
-from uoishelpers.resolvers import getLoadersFromInfo, getUserFromInfo
-
-from .BaseGQLModel import BaseGQLModel
-from ._GraphPermissions import RoleBasedPermission, OnlyForAuthentized
-from ._GraphResolvers import (
-    resolve_id,
-    resolve_name,
-    resolve_name_en,
-    resolve_changedby,
-    resolve_created,
-    resolve_lastchange,
-    resolve_createdby,
-    resolve_rbacobject,
-    # createRootResolver_by_id,
-    # createRootResolver_by_page
+from uoishelpers.gqlpermissions import (
+    OnlyForAuthentized, 
+    SimpleInsertPermission,
+    SimpleUpdatePermission,
+    SimpleDeletePermission
 )
+
+from uoishelpers.resolvers import (
+    getLoadersFromInfo,
+    createInputs,
+    VectorResolver,
+    ScalarResolver,
+    PageResolver,
+    Insert, InsertError,
+    Update, UpdateError,
+    Delete, DeleteError
+)
+from .BaseGQLModel import BaseGQLModel, IDType
 
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 PartGQLModel = Annotated["PartGQLModel", strawberry.lazy(".PartGQLModel")]
 
 @strawberry.federation.type(
-    keys=["id"], 
-    name="FormSectionGQLModel",
-    description="""Type representing a section in the form"""
+    keys=["id"], description="Entity representing a section within a form"
 )
 class SectionGQLModel(BaseGQLModel):
-    @classmethod
-    def getLoader(cls, info):
-        return getLoadersFromInfo(info).sections
-    
-    # @classmethod
-    # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
-    # implementation is inherited
+    """
+    GraphQL model for the Section entity.
+    Represents sections in forms, including their associated parts and form.
+    """
 
-    id = resolve_id
-    name = resolve_name
-    changedby = resolve_changedby
-    lastchange = resolve_lastchange
-    created = resolve_created
-    createdby = resolve_createdby
-    name_en = resolve_name_en
-    rbacobject = resolve_rbacobject
-
-    @strawberry.field(
-        description="""Section's order""",
-        permission_classes=[OnlyForAuthentized])
-    def order(self) -> int:
-        return self.order if self.order else 0
-
-    @strawberry.field(
-        description="Retrieves the parts related to this section",
-        permission_classes=[OnlyForAuthentized])
-    async def parts(self, info: strawberry.types.Info) -> typing.List["PartGQLModel"]:
-        loader = getLoadersFromInfo(info).parts
-        result = await loader.filter_by(section_id=self.id)
-        return result
-
-    @strawberry.field(
-        description="Retrieves the form owing this section",
-        permission_classes=[OnlyForAuthentized])
-    async def form(self, info: strawberry.types.Info) -> typing.Optional["FormGQLModel"]:
-        from .FormGQLModel import FormGQLModel
-        result = await FormGQLModel.resolve_reference(info, self.form_id)
-        return result
-
+    name: typing.Optional[str] = strawberry.field(
+        description="Name of the section",
+        permission_classes=[OnlyForAuthentized]
+    )
+    name_en: typing.Optional[str] = strawberry.field(
+        description="English name of the section",
+        permission_classes=[OnlyForAuthentized]
+    )
+    form_id: typing.Optional[IDType] = strawberry.field(
+        description="Foreign key to the associated form",
+        permission_classes=[OnlyForAuthentized]
+    )
+    order: typing.Optional[int] = strawberry.field(
+        description="Order of the section in the parent entity",
+        permission_classes=[OnlyForAuthentized]
+    )
+    status: typing.Optional[str] = strawberry.field(
+        description="Status of the section",
+        permission_classes=[OnlyForAuthentized]
+    )
+    state_id: typing.Optional[IDType] = strawberry.field(
+        description="State of the request",
+        permission_classes=[OnlyForAuthentized]
+    )
+    form: typing.Optional[FormGQLModel] = strawberry.field(
+        description="The associated form for this section",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormGQLModel"](fkey_field_name="form_id")
+    )
+    state: typing.Optional[FormStateGQLModel] = strawberry.field(
+        description="The state of the section",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormStateGQLModel"](fkey_field_name="state_id")
+    )
+    parts: typing.List[PartGQLModel] = strawberry.field(
+        description="Parts linked to this section",
+        permission_classes=[OnlyForAuthentized],
+        resolver=VectorResolver["PartGQLModel"](fkey_field_name="section_id")
+    )
 #############################################################
 #
 # Queries
@@ -84,12 +89,12 @@ from uoishelpers.resolvers import createInputs
 class SectionWhereFilter:
     name: str
     name_en: str
-    valid: bool
-    type_id: uuid.UUID
-    createdby: uuid.UUID
+    state_id: uuid.UUID
+    form_id: IDType
+    createdby_id: IDType
 
-    from .FormGQLModel import FormWhereFilter
-    form: FormWhereFilter
+    from .FormGQLModel import FormInputFilter
+    form: FormInputFilter
 
 # resolve_sectionsForForm = createAttributeVectorResolver(
 #     scalarType=SectionGQLModel, 
@@ -109,72 +114,75 @@ async def form_section_by_id(self, info: strawberry.types.Info, id: uuid.UUID) -
 #
 #############################################################
 
-@strawberry.input(description="Input structure - C operation")
+@strawberry.input(description="Attributes for creating a new form section")
 class SectionInsertGQLModel:
-    name: str = strawberry.field(description="Section name")
-    form_id: uuid.UUID = strawberry.field(description="id of parent entity")
+    id: typing.Optional[IDType] = strawberry.field(
+        description="Client-generated ID for the section (optional)", default=None
+    )
+    name: typing.Optional[str] = strawberry.field(description="Name of the section", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="English name of the section", default=None)
+    form_id: typing.Optional[IDType] = strawberry.field(description="ID of the associated form", default=None)
+    order: typing.Optional[int] = strawberry.field(description="Order of the section", default=None)
+    status: typing.Optional[str] = strawberry.field(description="Status of the section", default=None)
+    state_id: typing.Optional[IDType] = strawberry.field(description="ID of the state", default=None)
+    createdby_id: strawberry.Private[IDType] = None 
+    rbacobject_id: strawberry.Private[IDType] = None 
 
-    name_en: typing.Optional[str] = strawberry.field(description="Section english name", default=None)
-    id: typing.Optional[uuid.UUID] = strawberry.field(description="primary key (UUID), could be client generated", default=None)
-    order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
-    valid: typing.Optional[bool] = None
-    createdby: strawberry.Private[uuid.UUID] = None 
-    rbacobject: strawberry.Private[uuid.UUID] = None 
-
-@strawberry.input(description="Input structure - U operation")
+@strawberry.input(description="Attributes for updating an existing form section")
 class SectionUpdateGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
-    lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
+    id: IDType = strawberry.field(description="Unique ID of the section to update")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+    name: typing.Optional[str] = strawberry.field(description="Updated name of the section", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="Updated English name of the section", default=None)
+    form_id: typing.Optional[IDType] = strawberry.field(description="Updated form ID", default=None)
+    order: typing.Optional[int] = strawberry.field(description="Updated order of the section", default=None)
+    status: typing.Optional[str] = strawberry.field(description="Updated status of the section", default=None)
+    state_id: typing.Optional[IDType] = strawberry.field(description="Updated state ID", default=None)
+    changedby_id: strawberry.Private[IDType] = None
 
-    name: typing.Optional[str] = strawberry.field(description="Section name", default=None)
-    name_en: typing.Optional[str] = strawberry.field(description="Section english name", default=None)
-    order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
-    valid: typing.Optional[bool] = None
-    changedby: strawberry.Private[uuid.UUID] = None
-
-@strawberry.type(description="Result of CU operations")
-class SectionResultGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key of CU operation object")
-    msg: str = strawberry.field(description="""Should be `ok` if descired state has been reached, otherwise `fail`.
-For update operation fail should be also stated when bad lastchange has been entered.""")
-
-    @strawberry.field(description="Object of CU operation, final version")
-    async def section(self, info: strawberry.types.Info) -> SectionGQLModel:
-        return await SectionGQLModel.resolve_reference(info, self.id)
-
-@strawberry.mutation(
-    description="C operation",
-    permission_classes=[OnlyForAuthentized])
-async def section_insert(self, info: strawberry.types.Info, section: SectionInsertGQLModel) -> SectionResultGQLModel:
-    user = getUserFromInfo(info)
-    section.createdby = uuid.UUID(user["id"])
-
-    # form as the parent of new section is checked
-    # rbacobject is retrieved and assigned to section.rbacobject
-    # rbacobject is shared among form and its sections
-    formloader = getLoadersFromInfo(info).forms
-    form = await formloader.load(section.form_id)
-    assert form is not None, f"{section.form_id} is unknown form (during section insert)"
-    section.rbacobject = form.rbacobject
-
-    loader = getLoadersFromInfo(info).sections
-    row = await loader.insert(section)
-    result = SectionResultGQLModel(id=section.id, msg="fail")
-    result.msg = "ok"
-    result.id = row.id
-    print("section_insert", result)
-    return result
+@strawberry.input(description="Attributes for deleting an existing form section")
+class SectionDeleteGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the section to delete")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
 
 @strawberry.mutation(
-    description="U operation",
-    permission_classes=[OnlyForAuthentized])
-async def section_update(self, info: strawberry.types.Info, section: SectionUpdateGQLModel) -> SectionResultGQLModel:
-    user = getUserFromInfo(info)
-    section.changedby = uuid.UUID(user["id"])
+    description="Create a new form section",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleInsertPermission[SectionGQLModel](roles=["administrator"]),
+    ],
+)
+async def section_insert(
+    self, info: strawberry.types.Info, section: SectionInsertGQLModel
+) -> typing.Union[SectionGQLModel, InsertError[SectionGQLModel]]:
+    section.createdby_id = info.context["user"].id  # Set the private field for the creator
+    return await Insert[SectionGQLModel].DoItSafeWay(info=info, entity=section)
 
-    loader = getLoadersFromInfo(info).sections
-    row = await loader.update(section)
-    result = SectionResultGQLModel(id=section.id, msg="fail")
-    result.msg = "fail" if row is None else "ok"
-    result.id = section.id
-    return result   
+@strawberry.mutation(
+    description="Update an existing form section",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleUpdatePermission[SectionGQLModel](roles=["administrator"]),
+    ],
+)
+async def section_update(
+    self, info: strawberry.types.Info, section: SectionUpdateGQLModel
+) -> typing.Union[SectionGQLModel, UpdateError[SectionGQLModel]]:
+    section.updatedby_id = info.context["user"].id  # Set the private field for the updater
+    return await Update[SectionGQLModel].DoItSafeWay(info=info, entity=section)
+
+@strawberry.mutation(
+    description="Delete an existing form section",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleDeletePermission[SectionGQLModel](roles=["administrator"]),
+    ],
+)
+async def section_delete(
+    self, info: strawberry.types.Info, section: SectionDeleteGQLModel
+) -> typing.Optional[DeleteError[SectionGQLModel]]:
+    return await Delete[SectionGQLModel].DoItSafeWay(info=info, entity=section)

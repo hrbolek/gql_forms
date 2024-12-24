@@ -4,70 +4,67 @@ import typing
 import uuid
 
 from typing import Annotated
-
-from uoishelpers.resolvers import getLoadersFromInfo, getUserFromInfo
-
-from .BaseGQLModel import BaseGQLModel
-from ._GraphPermissions import RoleBasedPermission, OnlyForAuthentized
-from ._GraphResolvers import (
-    resolve_id,
-    resolve_name,
-    resolve_name_en,
-    resolve_changedby,
-    resolve_created,
-    resolve_lastchange,
-    resolve_createdby,
-    resolve_rbacobject,
-    # createRootResolver_by_id,
-    # createRootResolver_by_page
+from uoishelpers.gqlpermissions import (
+    OnlyForAuthentized, 
+    SimpleInsertPermission,
+    SimpleUpdatePermission,
+    SimpleDeletePermission
 )
+
+from uoishelpers.resolvers import (
+    getLoadersFromInfo,
+    VectorResolver,
+    PageResolver,
+    ScalarResolver,
+    Insert, InsertError,
+    Update, UpdateError,
+    Delete, DeleteError
+)
+from .BaseGQLModel import BaseGQLModel, IDType
 
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 RequestGQLModel = Annotated["RequestGQLModel", strawberry.lazy(".RequestGQLModel")]
 StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".externals")]
 
 @strawberry.federation.type(
-    keys=["id"], 
-    name="RequestHistoryGQLModel",
-    description="""Entity which stores a history of form evolution during a request. This allows to recall form changes."""
+    keys=["id"], description="Entity representing a history record for forms"
 )
 class HistoryGQLModel(BaseGQLModel):
     """
-    Type representing a request in the system.
-    This class extends the base `RequestModel` from the database and adds additional fields and methods needed for use in GraphQL.
+    GraphQL model for the History entity.
+    Tracks changes and historical states for forms and requests.
     """
-    @classmethod
-    def getLoader(cls, info):
-        return getLoadersFromInfo(info).histories
-    
-    # @classmethod
-    # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
-    # implementation is inherited
 
-    id = resolve_id
-    name = resolve_name
-    changedby = resolve_changedby
-    lastchange = resolve_lastchange
-    created = resolve_created
-    createdby = resolve_createdby
-    name_en = resolve_name_en
-    rbacobject = resolve_rbacobject
-
-    @strawberry.field(
-        description="""Request which history belongs to""",
-        permission_classes=[OnlyForAuthentized])
-    async def request(self, info: strawberry.types.Info) -> typing.Optional["RequestGQLModel"]:
-        from .RequestGQLModel import RequestGQLModel
-        result = await RequestGQLModel.resolve_reference(info, self.request_id)
-        return result
-
-    @strawberry.field(
-        description="""History form""",
-        permission_classes=[OnlyForAuthentized])
-    async def form(self, info: strawberry.types.Info) -> typing.Optional["FormGQLModel"]:
-        from .FormGQLModel import FormGQLModel
-        result = await FormGQLModel.resolve_reference(info, self.form_id)
-        return result
+    name: typing.Optional[str] = strawberry.field(
+        description="A notice describing the reason",
+        permission_classes=[OnlyForAuthentized]
+    )
+    name_en: typing.Optional[str] = strawberry.field(
+        description="English description of the reason",
+        permission_classes=[OnlyForAuthentized]
+    )
+    request_id: typing.Optional[IDType] = strawberry.field(
+        description="Foreign key to form requests",
+        permission_classes=[OnlyForAuthentized]
+    )
+    form_id: typing.Optional[IDType] = strawberry.field(
+        description="Foreign key to forms",
+        permission_classes=[OnlyForAuthentized]
+    )
+    state_id: typing.Optional[IDType] = strawberry.field(
+        description="State of the request",
+        permission_classes=[OnlyForAuthentized]
+    )
+    request: typing.Optional[FormRequestGQLModel] = strawberry.field(
+        description="The associated form request",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormRequestGQLModel"](fkey_field_name="request_id")
+    )
+    form: typing.Optional[FormGQLModel] = strawberry.field(
+        description="The associated form",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormGQLModel"](fkey_field_name="form_id")
+    )
     
     @strawberry.field(
         description="State od the form",
@@ -87,6 +84,41 @@ class HistoryGQLModel(BaseGQLModel):
     permission_classes=[OnlyForAuthentized])
 async def form_history_by_id(self, info: strawberry.types.Info, id: uuid.UUID) -> typing.Optional[HistoryGQLModel]:
     return await HistoryGQLModel.resolve_reference(info=info, id=id)
+
+@createInputs
+@dataclasses.dataclass
+class HistoryInputFilter:
+    """
+    Input filter for querying history records.
+    Allows filtering by various fields of the history records.
+    """
+    name: typing.Optional[str] = strawberry.field(
+        description="Filter by the name of the history record"
+    )
+    name_en: typing.Optional[str] = strawberry.field(
+        description="Filter by the English name of the history record"
+    )
+    request_id: typing.Optional[IDType] = strawberry.field(
+        description="Filter by the ID of the associated form request"
+    )
+    form_id: typing.Optional[IDType] = strawberry.field(
+        description="Filter by the ID of the associated form"
+    )
+    state_id: typing.Optional[IDType] = strawberry.field(
+        description="Filter by the state ID"
+    )
+    valid: typing.Optional[bool] = strawberry.field(
+        description="Filter by the validity status of the history record"
+    )
+
+
+history_page = strawberry.field(
+    description="Retrieve a paginated list of history records",
+    permission_classes=[OnlyForAuthentized],
+    graphql_type=typing.List[HistoryGQLModel],
+    resolver=PageResolver[HistoryGQLModel](whereType=HistoryInputFilter)
+)
+
 #############################################################
 #
 # Mutations
@@ -111,39 +143,69 @@ class HistoryUpdateGQLModel:
     name: typing.Optional[str] = strawberry.field(description="history name", default=None)
     changedby: strawberry.Private[uuid.UUID] = None
 
-@strawberry.type(description="Result of CU operations")
-class HistoryResultGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key of CU operation object")
-    msg: str = strawberry.field(description="""Should be `ok` if descired state has been reached, otherwise `fail`.
-For update operation fail should be also stated when bad lastchange has been entered.""")
 
-    @strawberry.field(description="Object of CU operation, final version")
-    async def history(self, info: strawberry.types.Info) -> HistoryGQLModel:
-        result = await HistoryGQLModel.resolve_reference(info=info, id=self.id)
-        return result
+@strawberry.input(description="Attributes for creating a new history record")
+class HistoryInsertGQLModel:
+    request_id: IDType = strawberry.field(description="ID of the associated form request")
+    form_id: IDType = strawberry.field(description="ID of the associated form")
+    state_id: IDType = strawberry.field(description="ID of the state")
+
+    id: typing.Optional[IDType] = strawberry.field(
+        description="Client-generated ID for the history record (optional)", default=None
+    )
+    name: typing.Optional[str] = strawberry.field(description="A notice describing the reason", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="English description of the reason", default=None)
+    createdby_id: strawberry.Private[uuid.UUID] = None    
+
+@strawberry.input(description="Attributes for updating an existing history record")
+class HistoryUpdateGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the history record to update")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+    name: typing.Optional[str] = strawberry.field(description="Updated notice describing the reason", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="Updated English description of the reason", default=None)
+    changedby_id: strawberry.Private[uuid.UUID] = None
+
+@strawberry.input(description="Attributes for deleting an existing history record")
+class HistoryDeleteGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the history record to delete")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
 
 @strawberry.mutation(
-    description="C operation",
-    permission_classes=[OnlyForAuthentized])
-async def history_insert(self, info: strawberry.types.Info, history: HistoryInsertGQLModel) -> HistoryResultGQLModel:
-    user = getUserFromInfo(info)
-    history.createdby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).histories
-    row = await loader.insert(history)
-    result = HistoryResultGQLModel(id=row.id, msg="ok")
-    result.msg = "ok"
-    result.id = row.id
-    return result
+    description="Create a new history record",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleInsertPermission[HistoryGQLModel](roles=["administrátor"]),
+    ],
+)
+async def history_insert(
+    self, info: strawberry.types.Info, history: HistoryInsertGQLModel
+) -> typing.Union[HistoryGQLModel, InsertError[HistoryGQLModel]]:
+    return await Insert[HistoryGQLModel].DoItSafeWay(info=info, entity=history)
 
 @strawberry.mutation(
-    description="U operation",
-    permission_classes=[OnlyForAuthentized])
-async def history_update(self, info: strawberry.types.Info, history: HistoryUpdateGQLModel) -> HistoryResultGQLModel:
-    user = getUserFromInfo(info)
-    history.changedby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).histories
-    row = await loader.update(history)
-    result = HistoryResultGQLModel(id=history.id, msg="ok")
-    result.msg = "fail" if row is None else "ok"
-    result.id = history.id
-    return result   
+    description="Update an existing history record",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleUpdatePermission[HistoryGQLModel](roles=["administrátor"]),
+    ],
+)
+async def history_update(
+    self, info: strawberry.types.Info, history: HistoryUpdateGQLModel
+) -> typing.Union[HistoryGQLModel, UpdateError[HistoryGQLModel]]:
+    return await Update[HistoryGQLModel].DoItSafeWay(info=info, entity=history)
+
+@strawberry.mutation(
+    description="Delete an existing history record",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleDeletePermission[HistoryGQLModel](roles=["administrátor"]),
+    ],
+)
+async def history_delete(
+    self, info: strawberry.types.Info, history: HistoryDeleteGQLModel
+) -> typing.Optional[DeleteError[HistoryGQLModel]]:
+    return await Delete[HistoryGQLModel].DoItSafeWay(info=info, entity=history)

@@ -7,24 +7,24 @@ import logging
 
 from typing import Annotated
 
-from uoishelpers.resolvers import getLoadersFromInfo, getUserFromInfo
-from uoishelpers.gqlpermissions import RoleBasedPermission, OnlyForAuthentized
-
-# from ._GraphPermissions import RoleBasedPermission
-from .BaseGQLModel import BaseGQLModel
-# from ._GraphPermissions import RoleBasedPermission, OnlyForAuthentized
-from ._GraphResolvers import (
-    resolve_id,
-    resolve_name,
-    resolve_name_en,
-    resolve_changedby,
-    resolve_created,
-    resolve_lastchange,
-    resolve_createdby,
-    resolve_rbacobject,
-    # createRootResolver_by_id,
-    # createRootResolver_by_page
+from uoishelpers.gqlpermissions import (
+    OnlyForAuthentized, 
+    SimpleInsertPermission,
+    SimpleUpdatePermission,
+    SimpleDeletePermission
 )
+
+from uoishelpers.resolvers import (
+    getLoadersFromInfo,
+    createInputs,
+    VectorResolver,
+    ScalarResolver,
+    PageResolver,
+    Insert, InsertError,
+    Update, UpdateError,
+    Delete, DeleteError
+)
+from .BaseGQLModel import BaseGQLModel, IDType
 
 UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".externals")]
 HistoryGQLModel = Annotated["HistoryGQLModel", strawberry.lazy(".HistoryGQLModel")]
@@ -33,86 +33,45 @@ FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
 
 # define the type help to get attribute name and name
 @strawberry.federation.type(
-    keys=["id"], description="""Entity representing a request (digital form of a paper, aka "student request to the dean")""",
-    
+    keys=["id"], description="Entity representing a form request"
 )
 class RequestGQLModel(BaseGQLModel):
     """
-    Type representing a request in the system.
-    This class extends the base `RequestModel` from the database and adds additional fields and methods needed for use in GraphQL.
+    GraphQL model for the Request entity.
+    Represents form requests, including their associated form and histories.
     """
-    @classmethod
-    def getLoader(cls, info):
-        return getLoadersFromInfo(info).requests
-    
-    # @classmethod
-    # async def resolve_reference(cls, info: strawberry.types.Info, id: uuid.UUID):
-    # implementation is inherited
 
-    id = resolve_id
-    name = resolve_name
-    changedby = resolve_changedby
-    lastchange = resolve_lastchange
-    created = resolve_created
-    createdby = resolve_createdby
-    name_en = resolve_name_en
-    rbacobject = resolve_rbacobject
-
-    # @strawberry.field(
-    #     description="""Permitted attribute""",
-    #     # extensions=[strawberry.permission.PermissionExtension(fail_silently=True, permissions=[RoleBasedPermission(roles="rector")])]
-    #     permission_classes=[RoleBasedPermission(roles="rector", whatreturn=None)]
-    #     )
-    # def permitted() -> typing.Optional[str]:
-    #     return "OK"
-
-    @strawberry.field(
-        description="""Request's time of last update""",
-        permission_classes=[OnlyForAuthentized])
-    def creator(self) -> typing.Optional["UserGQLModel"]:
-        from .externals import UserGQLModel
-        #result = await UserGQLModel.resolve_reference(id=self.createdby)
-        return UserGQLModel(id=self.createdby)
-
-    @strawberry.field(
-        description="""Request's time of last update""",
-        permission_classes=[
-            OnlyForAuthentized
-            ])
-    async def histories(self, info: strawberry.types.Info) -> typing.List["HistoryGQLModel"]:
-        loader = getLoadersFromInfo(info).histories
-        result = await loader.filter_by(request_id=self.id)
-        return result
-    
-    @strawberry.field(
-        description="""gdpr check""",
-        permission_classes=[
-            OnlyForAuthentized,
-            RoleBasedPermission("zpracovatel gdpr")
-        ])
-    async def gdpr(self, info: strawberry.types.Info, force: typing.Optional[bool] = False) -> typing.Optional[str]:
-        if force:
-            return "gdpr information"
-        else:
-            return None
-
-    @strawberry.field(
-        description="Retrieves the user who has initiated this request",
-        permission_classes=[OnlyForAuthentized])
-    async def state(self, info: strawberry.types.Info) -> typing.Optional["StateGQLModel"]:
-        #user = UserGQLModel(id=self.createdby)
-        from .externals import StateGQLModel
-        return await StateGQLModel.resolve_reference(info=info, id=self.state_id)
-    
-    @strawberry.field(
-        description="Retrieves the form owing this section",
-        permission_classes=[OnlyForAuthentized])
-    async def form(self, info: strawberry.types.Info) -> typing.Optional["FormGQLModel"]:
-        from .FormGQLModel import FormGQLModel
-        result = await FormGQLModel.resolve_reference(info, self.form_id)
-        return result
-
-
+    name: typing.Optional[str] = strawberry.field(
+        description="Name of the request",
+        permission_classes=[OnlyForAuthentized]
+    )
+    name_en: typing.Optional[str] = strawberry.field(
+        description="English name of the request",
+        permission_classes=[OnlyForAuthentized]
+    )
+    form_id: typing.Optional[IDType] = strawberry.field(
+        description="Foreign key to the associated form",
+        permission_classes=[OnlyForAuthentized]
+    )
+    state_id: typing.Optional[IDType] = strawberry.field(
+        description="State of the request",
+        permission_classes=[OnlyForAuthentized]
+    )
+    form: typing.Optional[FormGQLModel] = strawberry.field(
+        description="The associated form for this request",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormGQLModel"](fkey_field_name="form_id")
+    )
+    state: typing.Optional[FormStateGQLModel] = strawberry.field(
+        description="The state of the request",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["FormStateGQLModel"](fkey_field_name="state_id")
+    )
+    histories: typing.List[HistoryGQLModel] = strawberry.field(
+        description="Histories linked to this request",
+        permission_classes=[OnlyForAuthentized],
+        resolver=VectorResolver["HistoryGQLModel"](fkey_field_name="request_id")
+    )
 #############################################################
 #
 # Queries
@@ -169,22 +128,73 @@ request_page = strawberry.field(
 #
 #############################################################
 
-@strawberry.input(description="Input structure - C operation")
-class FormRequestInsertGQLModel:
-    name: str = strawberry.field(description="Request name")
-    form_id: uuid.UUID = strawberry.field(description="id of the form which will be copied as initial form of the request")
-    state_id: uuid.UUID = strawberry.field(description="id of the request state")
+@strawberry.input(description="Attributes for creating a new form request")
+class RequestInsertGQLModel:
+    id: typing.Optional[IDType] = strawberry.field(
+        description="Client-generated ID for the request (optional)", default=None
+    )
+    name: typing.Optional[str] = strawberry.field(description="Name of the request", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="English name of the request", default=None)
+    form_id: typing.Optional[IDType] = strawberry.field(description="ID of the associated form", default=None)
+    state_id: typing.Optional[IDType] = strawberry.field(description="ID of the state", default=None)
+    createdby_id: strawberry.Private[IDType] = None 
+    rbacobject_id: strawberry.Private[IDType] = None
 
-    id: typing.Optional[uuid.UUID] = strawberry.field(description="primary key (UUID), could be client generated", default=None)
-    createdby: strawberry.Private[uuid.UUID] = None 
-    rbacobject: strawberry.Private[uuid.UUID] = None
+@strawberry.input(description="Attributes for updating an existing form request")
+class RequestUpdateGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the request to update")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+    name: typing.Optional[str] = strawberry.field(description="Updated name of the request", default=None)
+    name_en: typing.Optional[str] = strawberry.field(description="Updated English name of the request", default=None)
+    form_id: typing.Optional[IDType] = strawberry.field(description="Updated form ID", default=None)
+    state_id: typing.Optional[IDType] = strawberry.field(description="Updated state ID", default=None)
+    changedby: strawberry.Private[IDType] = None
 
-@strawberry.input(description="Input structure - U operation")
-class FormRequestUpdateGQLModel:
-    lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
-    id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
-    name: typing.Optional[str] = strawberry.field(description="Request name", default=None)
-    changedby: strawberry.Private[uuid.UUID] = None
+
+@strawberry.input(description="Attributes for deleting an existing form request")
+class RequestDeleteGQLModel:
+    id: IDType = strawberry.field(description="Unique ID of the request to delete")
+    lastchange: datetime.datetime = strawberry.field(
+        description="Timestamp of the last modification"
+    )
+
+@strawberry.mutation(
+    description="Create a new form request",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleInsertPermission[RequestGQLModel](roles=["administrator"]),
+    ],
+)
+async def request_insert(
+    self, info: strawberry.types.Info, request: RequestInsertGQLModel
+) -> typing.Union[RequestGQLModel, InsertError[RequestGQLModel]]:
+    return await Insert[RequestGQLModel].DoItSafeWay(info=info, entity=request)
+
+@strawberry.mutation(
+    description="Update an existing form request",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleUpdatePermission[RequestGQLModel](roles=["administrator"]),
+    ],
+)
+async def request_update(
+    self, info: strawberry.types.Info, request: RequestUpdateGQLModel
+) -> typing.Union[RequestGQLModel, UpdateError[RequestGQLModel]]:
+    return await Update[RequestGQLModel].DoItSafeWay(info=info, entity=request)
+
+@strawberry.mutation(
+    description="Delete an existing form request",
+    permission_classes=[
+        OnlyForAuthentized,
+        SimpleDeletePermission[RequestGQLModel](roles=["administrator"]),
+    ],
+)
+async def request_delete(
+    self, info: strawberry.types.Info, request: RequestDeleteGQLModel
+) -> typing.Optional[DeleteError[RequestGQLModel]]:
+    return await Delete[RequestGQLModel].DoItSafeWay(info=info, entity=request)
 
 @strawberry.input(description="Input structure")
 class FormRequestUseTransitionGQLModel:
@@ -193,17 +203,6 @@ class FormRequestUseTransitionGQLModel:
     transition_id: uuid.UUID = strawberry.field(description="transition used for this operation")
     history_message: str = strawberry.field(description="this will appear in history records")
     changedby: strawberry.Private[uuid.UUID] = None
-
-@strawberry.type(description="Result of CU operations")
-class FormRequestResultGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key of CU operation object")
-    msg: str = strawberry.field(description="""Should be `ok` if descired state has been reached, otherwise `fail`.
-For update operation fail should be also stated when bad lastchange has been entered.""")
-
-    @strawberry.field(description="Object of CU operation, final version")
-    async def request(self, info: strawberry.types.Info) -> RequestGQLModel:
-        return await RequestGQLModel.resolve_reference(info, self.id)
-
 
 async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_form_id: uuid.UUID, copy_form_id: uuid.UUID, copy_state_id: uuid.UUID, copy_item_values=False):
     from .FormGQLModel import FormGQLModel
@@ -321,27 +320,8 @@ async def form_request_insert(self, info: strawberry.types.Info, request: FormRe
     result.id = row.id
     return result
 
-from ._GraphPermissions import StateBasedPermissionForUDOps
-
-@strawberry.mutation(
-    description="U operation",
-    permission_classes=[
-        OnlyForAuthentized,
-        StateBasedPermissionForUDOps(GQLModel=RequestGQLModel, parameterName="request", readPermission=False, writePermission=True)
-    ])
-async def form_request_update(self, info: strawberry.types.Info, request: FormRequestUpdateGQLModel) -> FormRequestResultGQLModel:
-    user = getUserFromInfo(info)
-    request.changedby = uuid.UUID(user["id"])
-    loader = getLoadersFromInfo(info).requests
-    row = await loader.update(request)
-    result = FormRequestResultGQLModel(id=request.id, msg="ok")
-    result.msg = "fail" if row is None else "ok"
-    result.id = request.id
-    return result   
-
-
+# from ._GraphPermissions import StateBasedPermissionForUDOps
 # from strawberry.extensions import FieldExtension
-
 
 # class TestExtension(FieldExtension):
 #     async def resolve_async(
@@ -365,7 +345,7 @@ async def form_request_update(self, info: strawberry.types.Info, request: FormRe
     description="U operation",
     permission_classes=[
         OnlyForAuthentized,
-        StateBasedPermissionForUDOps(GQLModel=RequestGQLModel, parameterName="request", readPermission=False, writePermission=True)
+        # StateBasedPermissionForUDOps(GQLModel=RequestGQLModel, parameterName="request", readPermission=False, writePermission=True)
         ],
     )
 async def form_request_use_transition(self, info: strawberry.types.Info, request: FormRequestUseTransitionGQLModel) -> typing.Optional[FormRequestResultGQLModel]:
