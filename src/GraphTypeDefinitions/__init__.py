@@ -201,4 +201,12 @@ class Mutation:
 #
 ###########################################################################################################################
 
-schema = strawberry.federation.Schema(Query, types=(UserGQLModel, StateGQLModel), mutation=Mutation)
+schema = strawberry.federation.Schema(
+    Query, mutation=Mutation,
+    types=(UserGQLModel, StateGQLModel), 
+    extensions=[])
+
+from uoishelpers.schema import WhoAmIExtension
+schema.extensions.append(
+    WhoAmIExtension()
+)

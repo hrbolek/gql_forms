@@ -88,11 +88,18 @@ from uoishelpers.resolvers import createInputs
 
 @createInputs
 @dataclass
-class RequestWhereFilter:
+class RequestInputFilter:
     name: str
     name_en: str
-    createdby: uuid.UUID
+    createdby_id: uuid.UUID
     state_id: uuid.UUID
+    form_id: uuid.UUID
+
+    from .HistoryGQLModel import HistoryInputFilter
+    histories: HistoryInputFilter
+
+    from .FormGQLModel import FormInputFilter
+    form: FormInputFilter
 
 @strawberry.field(
     description="""Finds an request by their id""",
@@ -126,7 +133,7 @@ from src.DBResolvers import RequestResolvers
 request_page = strawberry.field(
     description="Retrieves all requests",
     permission_classes=[OnlyForAuthentized],
-    resolver=RequestResolvers.Page(GQLModel=RequestGQLModel, WhereFilterModel=RequestWhereFilter)
+    resolver=PageResolver[RequestGQLModel](whereType=RequestInputFilter)
 )
 #############################################################
 #
@@ -212,6 +219,8 @@ class FormRequestUseTransitionGQLModel:
 
 async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_form_id: uuid.UUID, copy_form_id: uuid.UUID, copy_state_id: uuid.UUID, copy_item_values=False):
     from .FormGQLModel import FormGQLModel
+    actinguser = getUserFromInfo(info=info)
+    actinguser_id = IDType(actinguser["id"])
     formloader = FormGQLModel.getLoader(info=info)
     form_row = await formloader.load(source_form_id)
     assert form_row is not None, f"Form {source_form_id} has not been found"
@@ -224,8 +233,10 @@ async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_fo
             "state_id": copy_state_id,
             "request_id": request_id,
             "name": form_row.name,
-            "rbacobject": form_row.rbacobject,
-            "type_id": form_row.type_id
+            "name_en": form_row.name_en,
+            "rbacobject_id": form_row.rbacobject_id,
+            "type_id": form_row.type_id,
+            "changedby_id": actinguser_id
         })
     print(f"copy_form {copy_form.state_id} {copy_form}({copy_form.id} / {copy_form_id})")
     from .SectionGQLModel import SectionGQLModel
@@ -243,8 +254,11 @@ async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_fo
             "id": uuid.uuid1(), 
             "form_id": copy_form_id, 
             "state_id": copy_state_id,
-            "rbacobject": section.rbacobject,
+            "rbacobject_id": section.rbacobject_id,
+            "order": section.order,
             "name": section.name,
+            "name_en": section.name_en,
+            "changedby_id": actinguser_id
             }) for section in sections)
     copy_sections = await asyncio.gather(*copy_sections)
     # print("copy_sections", copy_sections, flush=True)
@@ -268,8 +282,11 @@ async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_fo
             "id": uuid.uuid1(), 
             "section_id": sections_map[part.section_id], 
             "state_id": copy_state_id,
-            "rbacobject": part.rbacobject,
+            "order": part.order,
+            "rbacobject_id": part.rbacobject_id,
             "name": part.name,
+            "name_en": part.name_en,
+            "changedby_id": actinguser_id
             }) for part in parts)
     copy_parts = await asyncio.gather(*copy_parts)
     # print("copy_parts", copy_parts, flush=True)
@@ -289,13 +306,16 @@ async def CopyForm(info: strawberry.types.Info, request_id: uuid.UUID, source_fo
         # entity=item, 
         entity=None, 
         extraAttributes={
-            "id": uuid.uuid1(), 
+            "id": uuid.uuid4(), 
             "part_id": parts_map[item.part_id], 
             "state_id": copy_state_id,
-            "rbacobject": item.rbacobject,
+            "rbacobject_id": item.rbacobject_id,
             "name": item.name,
+            "name_en": item.name_en,
+            "order": item.order,
             "value": item.value if copy_item_values else None,
-            "type_id": item.type_id
+            "type_id": item.type_id,
+            "changedby_id": actinguser_id
             }) for item in items )
     copy_items = await asyncio.gather(*copy_items)    
     return copy_form
@@ -309,7 +329,7 @@ async def form_request_insert(self, info: strawberry.types.Info, request: Reques
     request.createdby = uuid.UUID(user["id"])
     request.rbacobject = uuid.UUID(user["id"])
 
-    copy_form_id = uuid.uuid1()
+    copy_form_id = uuid.uuid4()
     copy_form = await CopyForm(
         info=info,
         request_id=request.id,
@@ -321,10 +341,7 @@ async def form_request_insert(self, info: strawberry.types.Info, request: Reques
     request.form_id=copy_form_id
     loader = getLoadersFromInfo(info).requests
     row = await loader.insert(request)
-    result = FormRequestResultGQLModel(id=row.id, msg="ok")
-    result.msg = "ok"
-    result.id = row.id
-    return result
+    return RequestGQLModel.from_dataclass(row)
 
 # from ._GraphPermissions import StateBasedPermissionForUDOps
 # from strawberry.extensions import FieldExtension
@@ -358,8 +375,10 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     # create copy of current form
     # make row in histories
     # change state of request
-    from uoishelpers.gqlpermissions import RBACObjectGQLModel
-    client = RBACObjectGQLModel.get_async_client(info=info)
+    # from uoishelpers.gqlpermissions import RBACObjectGQLModel
+    from uoishelpers.resolvers import getUgClientFromInfo
+    client = getUgClientFromInfo(info=info)
+    
     query = """query statetransitionById($id: UUID!) {
   result: statetransitionById(id: $id) {
     source { id }
@@ -378,7 +397,7 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     target_id = uuid.UUID(jsonResult["target"]["id"])
     print(f"transition {jsonResult}", flush=True)
     user = getUserFromInfo(info)
-    request.changedby = uuid.UUID(user["id"])
+    request.changedby_id = uuid.UUID(user["id"])
 
     # create copy of current form
     request_loader = RequestGQLModel.getLoader(info=info)
@@ -386,6 +405,7 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     assert request_row is not None, f"request.id {request.id} refers to unknown request"
 
     assert request_row.state_id == source_id, f"transition {request.transition_id} cannot be applied to state {request.state_id} see {request}"
+    assert request_row.form_id is not None, f"check request {strawberry.asdict(request_row)} form_id is None!"
     form_id = request_row.form_id
 
     # make row in histories
@@ -394,11 +414,14 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     history_row = await history_loader.insert(
         None, 
         extraAttributes={
-            "id": uuid.uuid1(), 
+            "id": uuid.uuid4(), 
             "form_id": form_id, 
             "request_id": request.id,
-            "state_id": target_id,
-            "name": request.history_message
+            "state_id": source_id,
+            "name": request.history_message,
+            "createdby_id": uuid.UUID(user["id"]),
+            "changedby_id": uuid.UUID(user["id"]),
+            "rbacobject_id": request_row.rbacobject_id
         }
     )
     # print("history name", request.history_message, flush=True)
@@ -407,7 +430,7 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     formloader = FormGQLModel.getLoader(info=info)
     form_row = await formloader.load(form_id)
     assert form_row is not None, f"Unexpected situation, form has not been found on request {request.id}"
-    copy_form_id = uuid.uuid1()
+    copy_form_id = uuid.uuid4()
     # form_row.history = history_row
     form_row.history = None
     form_row.history_id = history_row.id
@@ -417,7 +440,7 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
         request_id=request.id, 
         source_form_id=form_id, 
         copy_form_id=copy_form_id, 
-        copy_state_id=target_id,
+        copy_state_id=source_id,
         copy_item_values=True
     )
     # copy_form = await formloader.insert(entity=form_row, extraAttributes={"id": copy_form_id, "state_id": target_id})
@@ -509,10 +532,11 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
     requestAttributeValues={
         "id": request_row.id,
         "name": request_row.name,
-        "rbacobject": request_row.rbacobject,
+        "rbacobject_id": request_row.rbacobject_id,
         "form_id": copy_form_id,
         "state_id": target_id,
-        "lastchange": request_row.lastchange
+        "lastchange": request_row.lastchange,
+        "changedby_id": uuid.UUID(user["id"])
     }
     dbmodel = request_loader.getModel()
     updated_request_row = await request_loader.update(
@@ -520,9 +544,8 @@ async def form_request_use_transition(self, info: strawberry.types.Info, request
         entity=dbmodel(**requestAttributeValues), 
     )
 
-    result = FormRequestResultGQLModel(id=request.id, msg="ok")
-    result.msg = "fail" if updated_request_row is None else "ok"
-    result.id = request.id
+    result = RequestGQLModel.from_dataclass(updated_request_row)
+
     return result   
 
 

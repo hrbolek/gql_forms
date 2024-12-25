@@ -115,6 +115,7 @@ class HistoryInputFilter:
     valid: typing.Optional[bool] = strawberry.field(
         description="Filter by the validity status of the history record"
     )
+    createdby_id: IDType
 
 
 history_page = strawberry.field(
