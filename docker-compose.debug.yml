@@ -81,8 +81,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      - proxy
-      - gql_ug
+      - proxy_forms
+      - proxy_ug
 
   postgres_gql:
     image: postgres
