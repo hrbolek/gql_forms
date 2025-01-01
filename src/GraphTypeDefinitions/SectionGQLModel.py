@@ -1,3 +1,4 @@
+import asyncio
 import strawberry
 import datetime
 import typing
@@ -131,6 +132,9 @@ class SectionInsertGQLModel:
     order: typing.Optional[int] = strawberry.field(description="Order of the section", default=None)
     status: typing.Optional[str] = strawberry.field(description="Status of the section", default=None)
     state_id: typing.Optional[IDType] = strawberry.field(description="ID of the state", default=None)
+    
+    from .PartGQLModel import PartInsertGQLModel
+    parts: typing.Optional[typing.List[PartInsertGQLModel]] = strawberry.field(description="parts to create", default_factory=list)
     createdby_id: strawberry.Private[IDType] = None 
     rbacobject_id: strawberry.Private[IDType] = None 
 
@@ -155,37 +159,54 @@ class SectionDeleteGQLModel:
         description="Timestamp of the last modification"
     )
 
+async def section_insert_internal(
+    self, info: strawberry.types.Info, section: SectionInsertGQLModel
+) -> typing.Union[SectionGQLModel, InsertError[SectionGQLModel]]:
+    from .PartGQLModel import part_insert_internal
+    parts = section.parts
+    section.parts = None
+    section_result = await Insert[SectionGQLModel].DoItSafeWay(info=info, entity=section)
+    if getattr(section_result, "failed", False):
+        return section_result
+
+    futureresults = (part_insert_internal(self=self, info=info, part=part) for part in parts)
+    results = await asyncio.gather(*futureresults)
+    fails = [result.msg for result in results if getattr(result, "failed", False)]
+    if len(fails) > 0:
+        msg = "\n".join(fails)
+        return InsertError[SectionGQLModel](msg=msg, _input=section)
+        
+    return section_result
+
 @strawberry.mutation(
     description="Create a new form section",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[SectionGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[SectionGQLModel](roles=["administrátor"]),
     ],
 )
 async def section_insert(
     self, info: strawberry.types.Info, section: SectionInsertGQLModel
 ) -> typing.Union[SectionGQLModel, InsertError[SectionGQLModel]]:
-    section.createdby_id = info.context["user"].id  # Set the private field for the creator
-    return await Insert[SectionGQLModel].DoItSafeWay(info=info, entity=section)
+    return await section_insert_internal(self=self, info=info, section=section)
 
 @strawberry.mutation(
     description="Update an existing form section",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[SectionGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[SectionGQLModel](roles=["administrátor"]),
     ],
 )
 async def section_update(
     self, info: strawberry.types.Info, section: SectionUpdateGQLModel
 ) -> typing.Union[SectionGQLModel, UpdateError[SectionGQLModel]]:
-    section.updatedby_id = info.context["user"].id  # Set the private field for the updater
     return await Update[SectionGQLModel].DoItSafeWay(info=info, entity=section)
 
 @strawberry.mutation(
     description="Delete an existing form section",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[SectionGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[SectionGQLModel](roles=["administrátor"]),
     ],
 )
 async def section_delete(

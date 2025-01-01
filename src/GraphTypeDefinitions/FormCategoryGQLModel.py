@@ -65,7 +65,6 @@ class FormCategoryInputFilter:
     name: str
     name_en: str
 
-from src.DBResolvers import FormCategoryResolvers
 @strawberry.field(
     description=""
 )
@@ -126,7 +125,7 @@ async def form_category_insert(
     description="Update an existing form category",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[FormCategoryGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[FormCategoryGQLModel](roles=["administrátor"]),
     ],
 )
 async def form_category_update(

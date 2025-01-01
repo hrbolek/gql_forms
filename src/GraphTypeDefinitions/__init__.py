@@ -105,6 +105,15 @@ class Query:
     item_category_by_id = item_category_by_id
     item_category_page = item_category_page
 
+    from .RequestTypeGQLModel import (
+        request_type_by_id,
+        request_type_page
+    )
+
+    from .RequestCategoryGQLModel import (
+        request_category_by_id,
+        request_category_page
+    )
 
 ###########################################################################################################################
 #
@@ -133,11 +142,11 @@ class Mutation:
     form_update = form_update
 
     from .ItemGQLModel import (
-        item_insert,
-        item_update
+        item_insert as form_item_insert,
+        item_update as form_item_update,
+        item_delete as form_item_delete
+
     )
-    form_item_insert = item_insert
-    form_item_update = item_update
     #from .HistoryGQLModel import 
 
     from .ItemTypeGQLModel import (
@@ -148,17 +157,18 @@ class Mutation:
     
 
     from .PartGQLModel import (
-        part_insert,
-        part_update
+        part_insert as form_part_insert,
+        part_update as form_part_update,
+        part_delete as form_part_delete
     )
-    form_part_insert = part_insert
-    form_part_update = part_update
+
 
     from .SectionGQLModel import (
-        section_insert, section_update
+        section_insert as form_section_insert,  
+        section_update as form_section_update,
+        section_delete as form_section_delete
     )
-    form_section_insert = section_insert
-    form_section_update = section_update
+    
 
     from .RequestGQLModel import (
         request_insert as form_request_insert, 
@@ -189,6 +199,18 @@ class Mutation:
     form_item_category_insert = item_category_insert
     form_item_category_page = item_category_page
     form_item_category_by_id = item_category_by_id
+
+    from .RequestTypeGQLModel import (
+        request_type_insert,
+        request_type_update,
+        request_type_delete
+    )
+
+    from .RequestCategoryGQLModel import (
+        request_category_insert,
+        request_category_update,
+        request_category_delete
+    )
 
     
 

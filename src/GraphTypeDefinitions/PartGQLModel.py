@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import strawberry
 import datetime
@@ -123,25 +124,28 @@ async def form_part_by_id(self, info: strawberry.types.Info, id: uuid.UUID) -> t
 #
 #############################################################
 
-@strawberry.input(description="Input structure - C operation")
-class FormPartInsertGQLModel:
-    name: str = strawberry.field(description="Part name")
-    section_id: uuid.UUID
-    name_en: typing.Optional[str] = strawberry.field(description="English part name", default=None)
-    id: typing.Optional[uuid.UUID] = strawberry.field(description="primary key (UUID), could be client generated", default=None)
-    order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
-    createdby: strawberry.Private[uuid.UUID] = None 
-    rbacobject: strawberry.Private[uuid.UUID] = None 
+# @strawberry.input(description="Input structure - C operation")
+# class FormPartInsertGQLModel:
+#     name: str = strawberry.field(description="Part name")
+#     section_id: uuid.UUID
+#     name_en: typing.Optional[str] = strawberry.field(description="English part name", default=None)
+#     id: typing.Optional[uuid.UUID] = strawberry.field(description="primary key (UUID), could be client generated", default=None)
+#     order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
+    
+#     from .ItemGQLModel import FormItemInsertGQLModel
+#     items: typing.List[FormItemInsertGQLModel] = strawberry.field(description="items to create", default=[])
+#     createdby: strawberry.Private[uuid.UUID] = None 
+#     rbacobject: strawberry.Private[uuid.UUID] = None 
 
-@strawberry.input(description="Input structure - U operation")
-class FormPartUpdateGQLModel:
-    id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
-    lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
-    section_id: typing.Optional[uuid.UUID] = strawberry.field(description="id of parent entity", default=None)
-    name: typing.Optional[str] = strawberry.field(description="Part name", default=None)
-    name_en: typing.Optional[str] = strawberry.field(description="English part name", default=None)
-    order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
-    changedby: strawberry.Private[uuid.UUID] = None
+# @strawberry.input(description="Input structure - U operation")
+# class FormPartUpdateGQLModel:
+#     id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
+#     lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
+#     section_id: typing.Optional[uuid.UUID] = strawberry.field(description="id of parent entity", default=None)
+#     name: typing.Optional[str] = strawberry.field(description="Part name", default=None)
+#     name_en: typing.Optional[str] = strawberry.field(description="English part name", default=None)
+#     order: typing.Optional[int] = strawberry.field(description="Position in parent entity", default=None)
+#     changedby: strawberry.Private[uuid.UUID] = None
 
 
 @strawberry.input(description="Attributes for creating a new form part")
@@ -154,6 +158,9 @@ class PartInsertGQLModel:
     order: typing.Optional[int] = strawberry.field(description="Order of the part", default=None)
     section_id: typing.Optional[IDType] = strawberry.field(description="ID of the form section", default=None)
     state_id: typing.Optional[IDType] = strawberry.field(description="ID of the state", default=None)
+
+    from .ItemGQLModel import FormItemInsertGQLModel
+    items: typing.Optional[typing.List[FormItemInsertGQLModel]] = strawberry.field(description="items to create", default_factory=list)
     createdby_id: strawberry.Private[uuid.UUID] = None 
     rbacobject: strawberry.Private[uuid.UUID] = None 
 
@@ -177,23 +184,41 @@ class PartDeleteGQLModel:
         description="Timestamp of the last modification"
     )
 
+async def part_insert_internal(
+    self, info: strawberry.types.Info, part: PartInsertGQLModel
+) -> typing.Union[PartGQLModel, InsertError[PartGQLModel]]:
+    from .ItemGQLModel import item_insert_internal
+    items = part.items
+    part.items = []
+    part_result = await Insert[PartGQLModel].DoItSafeWay(info=info, entity=part)
+    if getattr(part_result, "failed", False):
+        return part_result
+        
+    futureresults = (item_insert_internal(self=self, info=info, item=item) for item in items)
+    results = await asyncio.gather(*futureresults)
+    fails = [result.msg for result in results if getattr(result, "failed", False)]
+    if len(fails) > 0:
+        msg = "\n".join(fails)
+        return InsertError[PartGQLModel](msg=msg, _input=part)
+    return part_result
+
 @strawberry.mutation(
     description="Create a new form part",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[PartGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[PartGQLModel](roles=["administrátor"]),
     ],
 )
 async def part_insert(
     self, info: strawberry.types.Info, part: PartInsertGQLModel
 ) -> typing.Union[PartGQLModel, InsertError[PartGQLModel]]:
-    return await Insert[PartGQLModel].DoItSafeWay(info=info, entity=part)
+    return await part_insert_internal(self=self, info=info, part=part)
 
 @strawberry.mutation(
     description="Update an existing form part",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[PartGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[PartGQLModel](roles=["administrátor"]),
     ],
 )
 async def part_update(
@@ -205,7 +230,7 @@ async def part_update(
     description="Delete an existing form part",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[PartGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[PartGQLModel](roles=["administrátor"]),
     ],
 )
 async def part_delete(

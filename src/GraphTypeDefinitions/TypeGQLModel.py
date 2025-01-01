@@ -26,8 +26,6 @@
 #     encapsulateDelete
 # )
 
-# from src.DBResolvers import DBResolvers
-
 # @strawberry.federation.type(
 #     keys=["id"], description="""Entity representing an entity category"""
 # )

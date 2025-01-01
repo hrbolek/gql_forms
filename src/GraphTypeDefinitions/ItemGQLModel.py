@@ -192,37 +192,40 @@ class ItemDeleteGQLModel:
         description="Timestamp of the last modification"
     )
 
+async def item_insert_internal(
+    self, info: strawberry.types.Info, item: ItemInsertGQLModel
+) -> typing.Union[ItemGQLModel, InsertError[ItemGQLModel]]:
+    return await Insert[ItemGQLModel].DoItSafeWay(info=info, entity=item)
+
 @strawberry.mutation(
     description="Create a new item",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[ItemGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[ItemGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_insert(
     self, info: strawberry.types.Info, item: ItemInsertGQLModel
 ) -> typing.Union[ItemGQLModel, InsertError[ItemGQLModel]]:
-    item.createdby_id = info.context["user"].id  # Set the private field for the creator
-    return await Insert[ItemGQLModel].DoItSafeWay(info=info, entity=item)
+    return await item_insert_internal(self=self, info=info, item=item)
 
 @strawberry.mutation(
     description="Update an existing item",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[ItemGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[ItemGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_update(
     self, info: strawberry.types.Info, item: ItemUpdateGQLModel
 ) -> typing.Union[ItemGQLModel, UpdateError[ItemGQLModel]]:
-    item.updatedby_id = info.context["user"].id  # Set the private field for the updater
     return await Update[ItemGQLModel].DoItSafeWay(info=info, entity=item)
 
 @strawberry.mutation(
     description="Delete an existing item",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[ItemGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[ItemGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_delete(

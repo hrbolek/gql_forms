@@ -16,6 +16,8 @@ from .ItemModel import ItemModel
 from .ItemTypeModel import ItemTypeModel
 from .PartModel import PartModel
 from .RequestModel import RequestModel
+from .RequestTypeModel import RequestTypeModel
+from .RequestCategoryModel import RequestCategoryModel
 from .SectionModel import SectionModel
 
 

@@ -79,7 +79,6 @@ class ItemTypeGQLModel(BaseGQLModel):
 # Queries
 #
 #############################################################
-from src.DBResolvers import ItemTypeResolvers
 
 from dataclasses import dataclass
 from uoishelpers.resolvers import createInputs
@@ -103,7 +102,7 @@ class FormItemTypeWhereFilter:
 
 item_type_page = strawberry.field(
     description="Retrieves the item types",
-    resolver=ItemTypeResolvers.Page(GQLModel=ItemTypeGQLModel, WhereFilterModel=FormItemTypeWhereFilter),
+    resolver=PageResolver[ItemTypeGQLModel](whereType=FormItemTypeWhereFilter),
     permission_classes=[
         OnlyForAuthentized
     ]
@@ -175,7 +174,7 @@ class ItemTypeDeleteGQLModel:
     description="Create a new item type",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[ItemTypeGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[ItemTypeGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_type_insert(
@@ -187,7 +186,7 @@ async def item_type_insert(
     description="Update an existing item type",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[ItemTypeGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[ItemTypeGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_type_update(
@@ -199,7 +198,7 @@ async def item_type_update(
     description="Delete an existing item type",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[ItemTypeGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[ItemTypeGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_type_delete(

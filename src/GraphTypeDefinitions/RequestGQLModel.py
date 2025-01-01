@@ -1,3 +1,4 @@
+import uuid
 import strawberry
 import datetime
 import typing
@@ -31,6 +32,8 @@ UserGQLModel = Annotated["UserGQLModel", strawberry.lazy(".userGQLModel")]
 HistoryGQLModel = Annotated["HistoryGQLModel", strawberry.lazy(".HistoryGQLModel")]
 StateGQLModel = Annotated["StateGQLModel", strawberry.lazy(".StateGQLModel")]
 FormGQLModel = Annotated["FormGQLModel", strawberry.lazy(".FormGQLModel")]
+RequestTypeGQLModel = Annotated["RequestTypeGQLModel", strawberry.lazy(".RequestTypeGQLModel")]
+
 
 # define the type help to get attribute name and name
 @strawberry.federation.type(
@@ -61,6 +64,10 @@ class RequestGQLModel(BaseGQLModel):
         description="State of the request",
         permission_classes=[OnlyForAuthentized]
     )
+    type_id: typing.Optional[IDType] = strawberry.field(
+        description="Foreign key to the request type",
+        permission_classes=[OnlyForAuthentized]
+    )
     form: typing.Optional[FormGQLModel] = strawberry.field(
         description="The associated form for this request",
         permission_classes=[OnlyForAuthentized],
@@ -70,6 +77,11 @@ class RequestGQLModel(BaseGQLModel):
         description="The state of the request",
         permission_classes=[OnlyForAuthentized],
         resolver=ScalarResolver["StateGQLModel"](fkey_field_name="state_id")
+    )
+    type: typing.Optional[RequestTypeGQLModel] = strawberry.field(
+        description="Type of the request",
+        permission_classes=[OnlyForAuthentized],
+        resolver=ScalarResolver["RequestTypeGQLModel"](fkey_field_name="type_id")
     )
 
     from .HistoryGQLModel import HistoryInputFilter
@@ -118,7 +130,7 @@ async def request_by_id(
 #     skip=0,
 #     limit=10
 #     )
-from src.DBResolvers import RequestResolvers
+
 # from ._GraphResolvers import asPage
 
 # @strawberry.field(
@@ -143,13 +155,14 @@ request_page = strawberry.field(
 
 @strawberry.input(description="Attributes for creating a new form request")
 class RequestInsertGQLModel:
+    request_type_id: IDType = strawberry.field(description="ID of request type")
     id: typing.Optional[IDType] = strawberry.field(
         description="Client-generated ID for the request (optional)", default=None
     )
     name: typing.Optional[str] = strawberry.field(description="Name of the request", default=None)
     name_en: typing.Optional[str] = strawberry.field(description="English name of the request", default=None)
-    form_id: typing.Optional[IDType] = strawberry.field(description="ID of the associated form", default=None)
-    state_id: typing.Optional[IDType] = strawberry.field(description="ID of the state", default=None)
+    state_id: strawberry.Private[IDType] = None # = strawberry.field(description="ID of the state", default=None)
+    form_id: strawberry.Private[IDType] = None  # = strawberry.field(description="ID of the associated form", default=None)
     createdby_id: strawberry.Private[IDType] = None 
     rbacobject_id: strawberry.Private[IDType] = None
 
@@ -177,19 +190,46 @@ class RequestDeleteGQLModel:
     description="Create a new form request",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[RequestGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[RequestGQLModel](roles=["administrátor"]),
     ],
 )
 async def request_insert(
     self, info: strawberry.types.Info, request: RequestInsertGQLModel
 ) -> typing.Union[RequestGQLModel, InsertError[RequestGQLModel]]:
+    try:
+        from .RequestTypeGQLModel import RequestTypeGQLModel
+        loader = RequestTypeGQLModel.getLoader(info=info)
+        assert request.request_type_id is not None, f"request_type_id not specified"
+        request_type = await loader.load(request.request_type_id)        
+        assert request_type is not None, f"typ {request.request_type_id} nenalezen"
+
+        request_type.state_id = IDType("daad63fe-a7e6-4577-9cbd-650cc601b27b")
+        assert request_type.template_form_id is not None, f"Není definován vzor formuláře typu požadavku, pravděpodobně není dokončena jeho editace typu požadavku"
+        assert request_type.state_id is not None, f"Není definován stav typu požadavku, pravděpodobně není dokončena jeho editace typu požadavku"
+
+        if request.id is None: request.id = uuid.uuid4()
+        copy_form_id = uuid.uuid4()
+        new_form = await CopyForm(
+            info=info,
+            request_id=request.id,
+            source_form_id=request_type.template_form_id,
+            copy_form_id=copy_form_id,
+            copy_state_id=request_type.state_id, 
+            copy_item_values=False
+            )
+        request.form_id = new_form.id
+        request.state_id = request_type.state_id
+    except Exception as e:
+        print("request_insert.exception ", e)
+        return  InsertError[RequestGQLModel](msg=f"{e}", _input=request)
+
     return await Insert[RequestGQLModel].DoItSafeWay(info=info, entity=request)
 
 @strawberry.mutation(
     description="Update an existing form request",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[RequestGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[RequestGQLModel](roles=["administrátor"]),
     ],
 )
 async def request_update(
@@ -201,7 +241,7 @@ async def request_update(
     description="Delete an existing form request",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[RequestGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[RequestGQLModel](roles=["administrátor"]),
     ],
 )
 async def request_delete(

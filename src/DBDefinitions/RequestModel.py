@@ -17,9 +17,15 @@ class RequestModel(BaseModel):
         default=None, 
         comment="Active request form, others are linked by histories"
     )
+    type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("formrequesttypes.id"), 
+        nullable=True, 
+        default=None, 
+        comment="type"
+    )
     
     state_id: Mapped[uuid.UUID] = UUIDFKey(nullable=True, comment="State of the request")
-    
+
     # Relationships
     histories = relationship(
         "HistoryModel", 
@@ -35,4 +41,10 @@ class RequestModel(BaseModel):
         default=None,  
         viewonly=True, 
         lazy="selectin"
+    )
+    type = relationship(
+        "RequestTypeModel", 
+        uselist=False,
+        default=None,  
+        viewonly=True
     )

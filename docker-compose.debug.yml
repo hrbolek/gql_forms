@@ -6,7 +6,15 @@ x-services-volume:
 
 
 services:
-  proxy:
+  proxy_forms:
+    image: proxy
+    restart: unless-stopped
+    build:
+      context: ./proxy  # Path to the directory containing the Dockerfile
+    environment:
+      - TARGET_SERVER=http://host.docker.internal:8002
+
+  proxy_ug:
     image: proxy
     restart: unless-stopped
     build:
@@ -47,9 +55,6 @@ services:
     depends_on:
       - postgres_credentials
 
-
-#          {"name": "projects", "url": "http://gql_projects:8000/gql"}
-
   apollo:
     image: hrbolek/apollo_federation
     # image: apollofederation:latest
@@ -60,8 +65,8 @@ services:
       - |
         SERVICES=
         [
-          {"name": "ug", "url": "http://gql_ug:8000/gql"},
-          {"name": "forms", "url": "http://proxy:8000/gql"}          
+          {"name": "ug", "url": "http://proxy_ug:8000/gql"},
+          {"name": "forms", "url": "http://proxy_forms:8000/gql"}          
         ]       
     healthcheck:
       # definice, umoznujici provest test, zda je kontejner v poradku (vsimnete si portu a srovnejte s portem v environment)
@@ -78,37 +83,6 @@ services:
     depends_on:
       - proxy
       - gql_ug
-
-  gql_ug:
-    image: hrbolek/gql_ug:0.10.0 #   image: kavic/ug
-    environment:
-      # link na db mimo stack
-      # - POSTGRES_HOST=host.docker.internal:5432
-      - POSTGRES_HOST=postgres_gql:5432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=example
-      - POSTGRES_DB=data
-      - JWTPUBLICKEYURL=http://frontend:8000/oauth/publickey
-      - JWTRESOLVEUSERPATHURL=http://frontend:8000/oauth/userinfo
-      - DEMO=False
-      - DEMODATA=True
-    healthcheck:
-      # definice, umoznujici provest test, zda je kontejner v poradku
-      test: "curl -f -H 'Content-Type: application/json' -X POST -d '{\"query\":\"query{__schema{types{name}}}\"}' http://localhost:8000/gql || exit 1"
-      interval: 60s
-      retries: 3
-      start_period: 60s
-      timeout: 10s
-    # deploy:
-    #   replicas: 3
-    restart: on-failure:3 # nedojde k restartu pokud je kontejner "unhealthy", maximalne 3 pokusy
-    # ports:
-    #   - 33012:8000
-    volumes:
-      - <<: *system-data-volume
-    depends_on:
-      - postgres_gql
-
 
   postgres_gql:
     image: postgres

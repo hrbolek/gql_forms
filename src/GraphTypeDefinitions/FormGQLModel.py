@@ -1,3 +1,4 @@
+import asyncio
 import strawberry
 import typing
 import datetime
@@ -116,15 +117,22 @@ class FormGQLModel(BaseGQLModel):
     @strawberry.field(
         description="Retrieves the type of form",
         permission_classes=[OnlyForAuthentized])
-    async def request(self, info: strawberry.types.Info) -> typing.Optional["RequestGQLModel"]:
+    async def request(self, info: strawberry.types.Info) -> typing.Optional["RequestGQLModel"]:        
         from .HistoryGQLModel import HistoryGQLModel
-        loader = HistoryGQLModel.getLoader(info)
+        from .RequestGQLModel import RequestGQLModel
+        loader = RequestGQLModel.getLoader(info=info)
         rows = await loader.filter_by(form_id=self.id)
         row = next(rows, None)
-
-        from .RequestGQLModel import RequestGQLModel
-        result =  await RequestGQLModel.resolve_reference(info, row.request_id)
-        return None if row is None else result
+        if row is None:
+            loader = HistoryGQLModel.getLoader(info)
+            rows = await loader.filter_by(form_id=self.id)
+            row = next(rows, None)
+            if row is None: return None
+            # assert row is not None, f"Request for the form {self.id} now found"
+            result =  await RequestGQLModel.resolve_reference(info, row.request_id)
+        else:
+            result =  RequestGQLModel.from_dataclass(row)
+        return result
     
 #############################################################
 #
@@ -188,19 +196,10 @@ class FormInsertGQLModel:
     valid: typing.Optional[bool] = strawberry.field(description="Indicates if the form is valid", default=True)
     type_id: typing.Optional[IDType] = strawberry.field(description="ID of the form type", default=None)
     state_id: typing.Optional[IDType] = strawberry.field(description="ID of the form state", default=None)
+
+    from .SectionGQLModel import SectionInsertGQLModel
+    sections: typing.Optional[typing.List[SectionInsertGQLModel]] = strawberry.field(description="sections to insert", default_factory=list)
     createdby_id: strawberry.Private[uuid.UUID] = None 
-
-
-@strawberry.input(description="Input structure - U operation")
-class FormUpdateGQLModel:
-    lastchange: datetime.datetime = strawberry.field(description="timestamp of last change = TOKEN")
-    id: uuid.UUID = strawberry.field(description="primary key (UUID), identifies object of operation")
-
-    name: typing.Optional[str] = strawberry.field(description="form name", default=None)
-    name_en: typing.Optional[str] = strawberry.field(description="form name", default=None)
-    type_id: typing.Optional[uuid.UUID] = strawberry.field(description="form type", default=None)
-    valid: typing.Optional[bool] = None
-    changedby: strawberry.Private[uuid.UUID] = None
 
 @strawberry.input(description="Attributes for updating an existing form")
 class FormUpdateGQLModel:
@@ -224,6 +223,26 @@ class FormDeleteGQLModel:
         description="Timestamp of the last modification"
     )    
 
+async def form_insert_internal(
+    self, info: strawberry.types.Info, form: FormInsertGQLModel
+) -> typing.Union[FormGQLModel, InsertError[FormGQLModel]]:
+    sections = form.sections
+    form.sections = []
+    form_result = await Insert[FormGQLModel].DoItSafeWay(info=info, entity=form)
+    if getattr(form_result, "failed", False):
+        print(f"failed form_insert_internal {form_result}")
+        return form_result
+    
+    from .SectionGQLModel import section_insert_internal
+    futureresults = (section_insert_internal(self=self, info=info, section=section) for section in sections)
+    results = await asyncio.gather(*futureresults)
+    fails = [result.msg for result in results if getattr(result, "failed", False)]
+    if len(fails) > 0:
+        msg = "\n".join(fails)
+        return InsertError[FormGQLModel](msg=msg, _input=form)
+
+    return form_result
+
 @strawberry.mutation(
         description="Create a new form",
         permission_classes=[
@@ -234,7 +253,7 @@ class FormDeleteGQLModel:
 async def form_insert(
     self, info: strawberry.types.Info, form: FormInsertGQLModel
 ) -> typing.Union[FormGQLModel, InsertError[FormGQLModel]]:
-    return await Insert[FormGQLModel].DoItSafeWay(info=info, entity=form)
+    return await form_insert_internal(self, info, form)
 
 @strawberry.mutation(
     description="Update an existing form",

@@ -60,7 +60,6 @@ class ItemCategoryGQLModel(BaseGQLModel):
 # Queries
 #
 #############################################################
-from src.DBResolvers import ItemCategoryResolvers
 
 from dataclasses import dataclass
 from uoishelpers.resolvers import createInputs
@@ -143,7 +142,7 @@ class ItemCategoryDeleteGQLModel:
     description="Create a new item category",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleInsertPermission[ItemCategoryGQLModel](roles=["administrator"]),
+        SimpleInsertPermission[ItemCategoryGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_category_insert(
@@ -155,7 +154,7 @@ async def item_category_insert(
     description="Update an existing item category",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleUpdatePermission[ItemCategoryGQLModel](roles=["administrator"]),
+        SimpleUpdatePermission[ItemCategoryGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_category_update(
@@ -167,7 +166,7 @@ async def item_category_update(
     description="Delete an existing item category",
     permission_classes=[
         OnlyForAuthentized,
-        SimpleDeletePermission[ItemCategoryGQLModel](roles=["administrator"]),
+        SimpleDeletePermission[ItemCategoryGQLModel](roles=["administrátor"]),
     ],
 )
 async def item_category_delete(
